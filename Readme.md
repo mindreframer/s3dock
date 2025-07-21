@@ -162,6 +162,33 @@ s3dock looks for configuration files in the following order:
 - `--config <path>` - Explicit configuration file path
 - `--profile <name>` - Profile to use from configuration
 - `--bucket <name>` - Override bucket name
+- `--log-level <n>` - Log level (1=error, 2=info, 3=debug)
+
+### Logging
+
+s3dock provides configurable logging levels to help with debugging and troubleshooting:
+
+- **Level 1 (Error)**: Only critical errors are logged
+- **Level 2 (Info)**: Normal operations and errors (default)
+- **Level 3 (Debug)**: Detailed trace information, operations, and errors
+
+```bash
+# Only show errors
+s3dock --log-level 1 push myapp:latest
+
+# Show normal operations (default)
+s3dock --log-level 2 push myapp:latest
+
+# Show detailed debug information
+s3dock --log-level 3 push myapp:latest
+```
+
+Debug output includes:
+- S3 operation details (upload paths, checksums)
+- Docker build context and parameters
+- Git operations and hash generation
+- File system operations
+- Network request details
 
 ### Available Commands
 

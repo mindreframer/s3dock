@@ -9,10 +9,11 @@ import (
 )
 
 type GlobalFlags struct {
-	Config  string
-	Profile string
-	Bucket  string
-	Help    bool
+	Config   string
+	Profile  string
+	Bucket   string
+	LogLevel int
+	Help     bool
 }
 
 func main() {
@@ -22,6 +23,11 @@ func main() {
 	}
 
 	globalFlags, remaining := parseGlobalFlags(os.Args[1:])
+
+	// Set log level from global flags
+	if globalFlags.LogLevel > 0 {
+		internal.SetLogLevel(internal.LogLevel(globalFlags.LogLevel))
+	}
 
 	if globalFlags.Help || len(remaining) == 0 {
 		printUsage()
@@ -43,17 +49,17 @@ func main() {
 	case "promote":
 		handlePromoteCommand(globalFlags, commandArgs)
 	case "pull":
-		fmt.Println("Pull functionality not yet implemented")
+		internal.LogInfo("Pull functionality not yet implemented")
 	case "list":
-		fmt.Println("List functionality not yet implemented")
+		internal.LogInfo("List functionality not yet implemented")
 	case "cleanup":
-		fmt.Println("Cleanup functionality not yet implemented")
+		internal.LogInfo("Cleanup functionality not yet implemented")
 	case "deploy":
-		fmt.Println("Deploy functionality not yet implemented")
+		internal.LogInfo("Deploy functionality not yet implemented")
 	case "help", "--help", "-h":
 		printUsage()
 	default:
-		fmt.Printf("Unknown command: %s\n", command)
+		internal.LogError("Unknown command: %s", command)
 		printUsage()
 		os.Exit(1)
 	}
@@ -66,6 +72,7 @@ func printUsage() {
 	fmt.Println("  --config <path>   Explicit config file path")
 	fmt.Println("  --profile <name>  Profile to use from config")
 	fmt.Println("  --bucket <name>   Override bucket name")
+	fmt.Println("  --log-level <n>   Log level (1=error, 2=info, 3=debug)")
 	fmt.Println("")
 	fmt.Println("Commands:")
 	fmt.Println("  build <app-name>    Build Docker image with git-based tag")
@@ -114,6 +121,18 @@ func parseGlobalFlags(args []string) (*GlobalFlags, []string) {
 				flags.Bucket = args[i+1]
 				i++
 			}
+		case "--log-level", "-l":
+			if i+1 < len(args) {
+				level := 0
+				fmt.Sscanf(args[i+1], "%d", &level)
+				if level >= 1 && level <= 3 {
+					flags.LogLevel = level
+				} else {
+					fmt.Fprintf(os.Stderr, "Invalid log level: %s (must be 1, 2, or 3)\n", args[i+1])
+					os.Exit(1)
+				}
+				i++
+			}
 		case "--help", "-h":
 			flags.Help = true
 		default:
@@ -141,12 +160,12 @@ func handlePushCommand(globalFlags *GlobalFlags, args []string) {
 
 	resolved, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
 	if err != nil {
-		fmt.Printf("Error loading config: %v\n", err)
+		internal.LogError("Error loading config: %v", err)
 		os.Exit(1)
 	}
 
 	if err := pushImageWithConfig(imageRef, resolved); err != nil {
-		fmt.Printf("Error pushing image: %v\n", err)
+		internal.LogError("Error pushing image: %v", err)
 		os.Exit(1)
 	}
 }
@@ -191,14 +210,14 @@ func handleConfigShow(globalFlags *GlobalFlags, args []string) {
 
 	config, err := internal.LoadConfig(configPath)
 	if err != nil {
-		fmt.Printf("Error loading config: %v\n", err)
+		internal.LogError("Error loading config: %v", err)
 		os.Exit(1)
 	}
 
 	if profileName != "" {
 		profile, exists := config.Profiles[profileName]
 		if !exists {
-			fmt.Printf("Profile '%s' not found\n", profileName)
+			internal.LogError("Profile '%s' not found", profileName)
 			os.Exit(1)
 		}
 		fmt.Printf("Profile: %s\n", profileName)
@@ -219,7 +238,7 @@ func handleConfigShow(globalFlags *GlobalFlags, args []string) {
 func handleConfigList(globalFlags *GlobalFlags, args []string) {
 	config, err := internal.LoadConfig(globalFlags.Config)
 	if err != nil {
-		fmt.Printf("Error loading config: %v\n", err)
+		internal.LogError("Error loading config: %v", err)
 		os.Exit(1)
 	}
 
@@ -269,16 +288,16 @@ func handleConfigInit(globalFlags *GlobalFlags, args []string) {
 }`
 
 	if _, err := os.Stat(configPath); err == nil {
-		fmt.Printf("Config file %s already exists\n", configPath)
+		internal.LogError("Config file %s already exists", configPath)
 		os.Exit(1)
 	}
 
 	if err := os.WriteFile(configPath, []byte(defaultContent), 0644); err != nil {
-		fmt.Printf("Error creating config file: %v\n", err)
+		internal.LogError("Error creating config file: %v", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Created config file: %s\n", configPath)
+	internal.LogInfo("Created config file: %s", configPath)
 }
 
 func pushImageWithConfig(imageRef string, config *internal.ResolvedConfig) error {
@@ -351,7 +370,7 @@ func handleBuildCommand(globalFlags *GlobalFlags, args []string) {
 	}
 
 	if err := buildImageWithConfig(appName, contextPath, dockerfile); err != nil {
-		fmt.Printf("Error building image: %v\n", err)
+		internal.LogError("Error building image: %v", err)
 		os.Exit(1)
 	}
 }
@@ -390,12 +409,12 @@ func handleTagCommand(globalFlags *GlobalFlags, args []string) {
 
 	resolved, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
 	if err != nil {
-		fmt.Printf("Error loading config: %v\n", err)
+		internal.LogError("Error loading config: %v", err)
 		os.Exit(1)
 	}
 
 	if err := tagImageWithConfig(imageRef, version, resolved); err != nil {
-		fmt.Printf("Error tagging image: %v\n", err)
+		internal.LogError("Error tagging image: %v", err)
 		os.Exit(1)
 	}
 }
@@ -424,24 +443,24 @@ func handlePromoteCommand(globalFlags *GlobalFlags, args []string) {
 		version = args[1]
 		environment = args[2]
 	} else {
-		fmt.Println("Invalid number of arguments")
+		internal.LogError("Invalid number of arguments")
 		os.Exit(1)
 	}
 
 	resolved, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
 	if err != nil {
-		fmt.Printf("Error loading config: %v\n", err)
+		internal.LogError("Error loading config: %v", err)
 		os.Exit(1)
 	}
 
 	if len(args) == 2 {
 		if err := promoteImageWithConfig(source, environment, resolved); err != nil {
-			fmt.Printf("Error promoting image: %v\n", err)
+			internal.LogError("Error promoting image: %v", err)
 			os.Exit(1)
 		}
 	} else {
 		if err := promoteTagWithConfig(appName, version, environment, resolved); err != nil {
-			fmt.Printf("Error promoting tag: %v\n", err)
+			internal.LogError("Error promoting tag: %v", err)
 			os.Exit(1)
 		}
 	}
