@@ -9,13 +9,13 @@ import (
 )
 
 type ImageMetadata struct {
-	Checksum   string    `json:"checksum"`
-	Size       int64     `json:"size"`
-	CreatedAt  time.Time `json:"created_at"`
-	GitHash    string    `json:"git_hash"`
-	GitTime    string    `json:"git_time"`
-	ImageTag   string    `json:"image_tag"`
-	AppName    string    `json:"app_name"`
+	Checksum  string    `json:"checksum"`
+	Size      int64     `json:"size"`
+	CreatedAt time.Time `json:"created_at"`
+	GitHash   string    `json:"git_hash"`
+	GitTime   string    `json:"git_time"`
+	ImageTag  string    `json:"image_tag"`
+	AppName   string    `json:"app_name"`
 }
 
 func (m *ImageMetadata) ToJSON() ([]byte, error) {

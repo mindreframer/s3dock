@@ -82,13 +82,13 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 
 		if existingMetadata.Checksum == metadata.Checksum {
 			fmt.Printf("Image %s already exists with same checksum, skipping upload\n", imageRef)
-			
+
 			// Log audit event for skipped upload
 			auditEvent, err := CreatePushEvent(appName, gitHash, gitTime, imageRef, s3Key, metadata.Checksum, metadata.Size, true, false)
 			if err == nil {
 				p.audit.LogEvent(ctx, auditEvent)
 			}
-			
+
 			return nil
 		}
 
@@ -117,14 +117,14 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 	}
 
 	fmt.Printf("Successfully pushed %s to s3://%s/%s (checksum: %s)\n", imageRef, p.bucket, s3Key, metadata.Checksum)
-	
+
 	// Log audit event for successful upload
 	wasArchived := exists // If metadata existed, we archived it
 	auditEvent, err := CreatePushEvent(appName, gitHash, gitTime, imageRef, s3Key, metadata.Checksum, metadata.Size, false, wasArchived)
 	if err == nil {
 		p.audit.LogEvent(ctx, auditEvent)
 	}
-	
+
 	return nil
 }
 

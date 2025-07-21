@@ -22,7 +22,7 @@ func (b *ImageBuilder) Build(ctx context.Context, appName string, contextPath st
 	if err != nil {
 		return "", fmt.Errorf("failed to check repository status: %w", err)
 	}
-	
+
 	if isDirty {
 		return "", fmt.Errorf("repository has uncommitted changes - commit all changes before building")
 	}
@@ -38,7 +38,7 @@ func (b *ImageBuilder) Build(ctx context.Context, appName string, contextPath st
 	}
 
 	tag := fmt.Sprintf("%s:%s-%s", appName, timestamp, gitHash)
-	
+
 	if err := b.docker.BuildImage(ctx, contextPath, dockerfile, []string{tag}); err != nil {
 		return "", fmt.Errorf("failed to build image: %w", err)
 	}

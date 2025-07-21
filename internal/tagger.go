@@ -61,13 +61,13 @@ func (t *ImageTagger) Tag(ctx context.Context, imageRef, version string) error {
 	}
 
 	fmt.Printf("Successfully tagged %s as %s\n", imageRef, version)
-	
+
 	// Log audit event for tag creation
 	auditEvent, err := CreateTagEvent(appName, gitHash, gitTime, imageRef, version, tagKey)
 	if err == nil {
 		t.audit.LogEvent(ctx, auditEvent)
 	}
-	
+
 	return nil
 }
 
@@ -129,7 +129,7 @@ func (p *ImagePromoter) Promote(ctx context.Context, source, environment string)
 	// Check for existing pointer to track previous state
 	envKey := GeneratePointerKey(appName, environment)
 	var previousTarget string
-	
+
 	existingExists, err := p.s3.Exists(ctx, p.bucket, envKey)
 	if err == nil && existingExists {
 		existingData, err := p.s3.Download(ctx, p.bucket, envKey)
@@ -152,20 +152,20 @@ func (p *ImagePromoter) Promote(ctx context.Context, source, environment string)
 	}
 
 	fmt.Printf("Successfully promoted %s to %s environment\n", source, environment)
-	
-	// Log audit event for promotion  
+
+	// Log audit event for promotion
 	auditEvent, err := CreatePromotionEvent(appName, pointer.GitHash, pointer.GitTime, environment, source, "image", envKey, previousTarget)
 	if err == nil {
 		p.audit.LogEvent(ctx, auditEvent)
 	}
-	
+
 	return nil
 }
 
 func (p *ImagePromoter) PromoteFromTag(ctx context.Context, appName, version, environment string) error {
 	// Download the tag to get image information
 	tagKey := GenerateTagKey(appName, version)
-	
+
 	tagExists, err := p.s3.Exists(ctx, p.bucket, tagKey)
 	if err != nil {
 		return fmt.Errorf("failed to check if tag exists: %w", err)
@@ -193,7 +193,7 @@ func (p *ImagePromoter) PromoteFromTag(ctx context.Context, appName, version, en
 	// Check for existing pointer to track previous state
 	envKey := GeneratePointerKey(appName, environment)
 	var previousTarget string
-	
+
 	existingExists, err := p.s3.Exists(ctx, p.bucket, envKey)
 	if err == nil && existingExists {
 		existingData, err := p.s3.Download(ctx, p.bucket, envKey)
@@ -216,13 +216,13 @@ func (p *ImagePromoter) PromoteFromTag(ctx context.Context, appName, version, en
 	}
 
 	fmt.Printf("Successfully promoted %s %s to %s environment\n", appName, version, environment)
-	
+
 	// Log audit event for tag-based promotion
 	sourceRef := fmt.Sprintf("%s:%s", appName, version)
 	auditEvent, err := CreatePromotionEvent(appName, tagPointer.GitHash, tagPointer.GitTime, environment, sourceRef, "tag", envKey, previousTarget)
 	if err == nil {
 		p.audit.LogEvent(ctx, auditEvent)
 	}
-	
+
 	return nil
 }

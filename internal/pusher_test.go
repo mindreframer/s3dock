@@ -99,12 +99,12 @@ func TestImagePusher_Push_Success_NewImage(t *testing.T) {
 	mockGit.On("GetCurrentHash").Return("abc1234", nil)
 	mockGit.On("GetCommitTimestamp").Return("20250721-1430", nil)
 	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(io.NopCloser(strings.NewReader("image data")), nil)
-	
+
 	// Metadata doesn't exist (new image)
 	mockS3.On("Exists", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".json") && strings.HasPrefix(key, "images/")
 	})).Return(false, nil)
-	
+
 	// Upload image and metadata
 	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".tar.gz") && strings.HasPrefix(key, "images/")
@@ -112,7 +112,7 @@ func TestImagePusher_Push_Success_NewImage(t *testing.T) {
 	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".json") && strings.HasPrefix(key, "images/")
 	}), mock.Anything).Return(nil)
-	
+
 	// Mock audit log upload
 	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasPrefix(key, "audit/") && strings.Contains(key, "push")
@@ -136,12 +136,12 @@ func TestImagePusher_Push_Success_ExistingSameChecksum(t *testing.T) {
 	mockGit.On("GetCurrentHash").Return("abc1234", nil)
 	mockGit.On("GetCommitTimestamp").Return("20250721-1430", nil)
 	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(io.NopCloser(strings.NewReader("image data")), nil)
-	
+
 	// Metadata exists
 	mockS3.On("Exists", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".json") && strings.HasPrefix(key, "images/")
 	})).Return(true, nil)
-	
+
 	// Return existing metadata with same checksum
 	existingMetadata := &ImageMetadata{
 		Checksum: "e09a574ca3760a3e28a3e5920fe4627e", // MD5 of "image data"
@@ -151,7 +151,7 @@ func TestImagePusher_Push_Success_ExistingSameChecksum(t *testing.T) {
 	mockS3.On("Download", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".json") && strings.HasPrefix(key, "images/")
 	})).Return(metadataJSON, nil)
-	
+
 	// Mock audit log upload for skipped push
 	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasPrefix(key, "audit/") && strings.Contains(key, "push")
@@ -191,12 +191,12 @@ func TestImagePusher_Push_Success_ChecksumMismatch(t *testing.T) {
 	mockGit.On("GetCurrentHash").Return("abc1234", nil)
 	mockGit.On("GetCommitTimestamp").Return("20250721-1430", nil)
 	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(io.NopCloser(strings.NewReader("new image data")), nil)
-	
+
 	// Metadata exists
 	mockS3.On("Exists", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".json") && strings.HasPrefix(key, "images/")
 	})).Return(true, nil)
-	
+
 	// Return existing metadata with different checksum
 	existingMetadata := &ImageMetadata{
 		Checksum: "old-checksum-value",
@@ -206,13 +206,13 @@ func TestImagePusher_Push_Success_ChecksumMismatch(t *testing.T) {
 	mockS3.On("Download", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".json") && strings.HasPrefix(key, "images/")
 	})).Return(metadataJSON, nil)
-	
+
 	// Archive operations
 	mockS3.On("Copy", mock.Anything, "test-bucket", mock.AnythingOfType("string"), mock.MatchedBy(func(key string) bool {
 		return strings.HasPrefix(key, "archive/")
 	})).Return(nil)
 	mockS3.On("Delete", mock.Anything, "test-bucket", mock.AnythingOfType("string")).Return(nil)
-	
+
 	// Upload new image and metadata
 	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".tar.gz") && strings.HasPrefix(key, "images/")
@@ -220,7 +220,7 @@ func TestImagePusher_Push_Success_ChecksumMismatch(t *testing.T) {
 	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".json") && strings.HasPrefix(key, "images/")
 	}), mock.Anything).Return(nil)
-	
+
 	// Mock audit log upload for push with archive
 	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasPrefix(key, "audit/") && strings.Contains(key, "push")

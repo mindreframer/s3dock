@@ -17,14 +17,14 @@ const (
 )
 
 type PointerMetadata struct {
-	TargetType   TargetType `json:"target_type"`
-	TargetPath   string     `json:"target_path"`
-	PromotedAt   time.Time  `json:"promoted_at"`
-	PromotedBy   string     `json:"promoted_by"`
-	GitHash      string     `json:"git_hash"`
-	GitTime      string     `json:"git_time"`
-	SourceImage  string     `json:"source_image,omitempty"`  // Original image reference if tagged
-	SourceTag    string     `json:"source_tag,omitempty"`    // Source tag if promoted from tag
+	TargetType  TargetType `json:"target_type"`
+	TargetPath  string     `json:"target_path"`
+	PromotedAt  time.Time  `json:"promoted_at"`
+	PromotedBy  string     `json:"promoted_by"`
+	GitHash     string     `json:"git_hash"`
+	GitTime     string     `json:"git_time"`
+	SourceImage string     `json:"source_image,omitempty"` // Original image reference if tagged
+	SourceTag   string     `json:"source_tag,omitempty"`   // Source tag if promoted from tag
 }
 
 func (p *PointerMetadata) ToJSON() ([]byte, error) {
