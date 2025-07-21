@@ -1,8 +1,10 @@
 package internal
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"time"
 )
 
@@ -42,7 +44,12 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 	}
 	defer imageData.Close()
 
-	if err := p.s3.Upload(ctx, p.bucket, s3Key, imageData); err != nil {
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, imageData); err != nil {
+		return fmt.Errorf("failed to buffer image data: %w", err)
+	}
+
+	if err := p.s3.Upload(ctx, p.bucket, s3Key, &buf); err != nil {
 		return fmt.Errorf("failed to upload to S3: %w", err)
 	}
 
