@@ -20,6 +20,11 @@ func (m *MockDockerClient) ExportImage(ctx context.Context, imageRef string) (io
 	return args.Get(0).(io.ReadCloser), args.Error(1)
 }
 
+func (m *MockDockerClient) BuildImage(ctx context.Context, contextPath string, dockerfile string, tags []string) error {
+	args := m.Called(ctx, contextPath, dockerfile, tags)
+	return args.Error(0)
+}
+
 type MockS3Client struct {
 	mock.Mock
 }
@@ -36,6 +41,16 @@ type MockGitClient struct {
 func (m *MockGitClient) GetCurrentHash() (string, error) {
 	args := m.Called()
 	return args.String(0), args.Error(1)
+}
+
+func (m *MockGitClient) GetCommitTimestamp() (string, error) {
+	args := m.Called()
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockGitClient) IsRepositoryDirty() (bool, error) {
+	args := m.Called()
+	return args.Bool(0), args.Error(1)
 }
 
 func TestExtractAppName(t *testing.T) {

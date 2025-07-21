@@ -7,6 +7,7 @@ import (
 
 type DockerClient interface {
 	ExportImage(ctx context.Context, imageRef string) (io.ReadCloser, error)
+	BuildImage(ctx context.Context, contextPath string, dockerfile string, tags []string) error
 }
 
 type S3Client interface {
@@ -15,4 +16,6 @@ type S3Client interface {
 
 type GitClient interface {
 	GetCurrentHash() (string, error)
+	GetCommitTimestamp() (string, error)
+	IsRepositoryDirty() (bool, error)
 }

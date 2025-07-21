@@ -32,6 +32,8 @@ func main() {
 	commandArgs := remaining[1:]
 
 	switch command {
+	case "build":
+		handleBuildCommand(globalFlags, commandArgs)
 	case "push":
 		handlePushCommand(globalFlags, commandArgs)
 	case "config":
@@ -64,6 +66,7 @@ func printUsage() {
 	fmt.Println("  --bucket <name>   Override bucket name")
 	fmt.Println("")
 	fmt.Println("Commands:")
+	fmt.Println("  build <app-name>  Build Docker image with git-based tag")
 	fmt.Println("  push <image:tag>  Push Docker image to S3")
 	fmt.Println("  config            Config file management")
 	fmt.Println("  tag               Tag functionality (not implemented)")
@@ -73,7 +76,9 @@ func printUsage() {
 	fmt.Println("  deploy            Deploy functionality (not implemented)")
 	fmt.Println("")
 	fmt.Println("Examples:")
-	fmt.Println("  s3dock push myapp:latest")
+	fmt.Println("  s3dock build myapp")
+	fmt.Println("  s3dock build myapp --dockerfile Dockerfile.prod")
+	fmt.Println("  s3dock push myapp:20250721-2118-f7a5a27")
 	fmt.Println("  s3dock --profile dev push myapp:latest")
 	fmt.Println("  s3dock --config ./test.json5 push myapp:latest")
 	fmt.Println("  s3dock config show")
@@ -299,4 +304,64 @@ func pushImageWithConfig(imageRef string, config *internal.ResolvedConfig) error
 	pusher := internal.NewImagePusher(dockerClient, s3Client, gitClient, config.Bucket)
 
 	return pusher.Push(ctx, imageRef)
+}
+
+func handleBuildCommand(globalFlags *GlobalFlags, args []string) {
+	if len(args) == 0 {
+		fmt.Println("Usage: s3dock [global-flags] build <app-name> [build-flags]")
+		fmt.Println("")
+		fmt.Println("Build a Docker image with git-based tag.")
+		fmt.Println("")
+		fmt.Println("Build Flags:")
+		fmt.Println("  --dockerfile <path>  Dockerfile to use (default: Dockerfile)")
+		fmt.Println("  --context <path>     Build context path (default: .)")
+		fmt.Println("")
+		fmt.Println("The image will be tagged as: <app-name>:<timestamp>-<git-hash>")
+		fmt.Println("Example: myapp:20250721-2118-f7a5a27")
+		return
+	}
+
+	appName := args[0]
+	buildArgs := args[1:]
+
+	dockerfile := "Dockerfile"
+	contextPath := "."
+
+	for i := 0; i < len(buildArgs); i++ {
+		arg := buildArgs[i]
+		switch arg {
+		case "--dockerfile":
+			if i+1 < len(buildArgs) {
+				dockerfile = buildArgs[i+1]
+				i++
+			}
+		case "--context":
+			if i+1 < len(buildArgs) {
+				contextPath = buildArgs[i+1]
+				i++
+			}
+		}
+	}
+
+	if err := buildImageWithConfig(appName, contextPath, dockerfile); err != nil {
+		fmt.Printf("Error building image: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func buildImageWithConfig(appName, contextPath, dockerfile string) error {
+	ctx := context.Background()
+
+	dockerClient, err := internal.NewDockerClient()
+	if err != nil {
+		return fmt.Errorf("failed to create Docker client: %w", err)
+	}
+	defer dockerClient.Close()
+
+	gitClient := internal.NewGitClient()
+
+	builder := internal.NewImageBuilder(dockerClient, gitClient)
+
+	_, err = builder.Build(ctx, appName, contextPath, dockerfile)
+	return err
 }
