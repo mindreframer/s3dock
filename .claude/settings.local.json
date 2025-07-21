@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go:*)",
+      "Bash(./s3dock)",
+      "Bash(./s3dock:*)"
+    ],
+    "deny": []
+  }
+}
