@@ -3,7 +3,13 @@
     "allow": [
       "Bash(go:*)",
       "Bash(./s3dock)",
-      "Bash(./s3dock:*)"
+      "Bash(./s3dock:*)",
+      "Bash(mv:*)",
+      "Bash(rm:*)",
+      "Bash(docker build:*)",
+      "Bash(docker compose:*)",
+      "Bash(S3DOCK_BUCKET=s3dock-test ./s3dock push:*)",
+      "Bash(make:*)"
     ],
     "deny": []
   }

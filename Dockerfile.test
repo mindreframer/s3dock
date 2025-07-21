@@ -1,0 +1,3 @@
+FROM alpine:latest
+RUN mkdir -p /app && echo "Hello from s3dock test image" > /app/message.txt
+CMD ["cat", "/app/message.txt"]
