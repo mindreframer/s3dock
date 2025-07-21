@@ -12,6 +12,10 @@ type DockerClient interface {
 
 type S3Client interface {
 	Upload(ctx context.Context, bucket, key string, data io.Reader) error
+	Exists(ctx context.Context, bucket, key string) (bool, error)
+	Download(ctx context.Context, bucket, key string) ([]byte, error)
+	Copy(ctx context.Context, bucket, srcKey, dstKey string) error
+	Delete(ctx context.Context, bucket, key string) error
 }
 
 type GitClient interface {

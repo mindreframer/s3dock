@@ -16,9 +16,10 @@ s3dock stores Docker images as tar.gz files in S3 buckets with pointer files for
 
 ### 2. Image Publisher (`s3dock push`)
 - Export local Docker image to tar.gz
-- Upload to S3 with consistent naming (timestamp + git hash)
-- Calculate and store image metadata
-- Future: Checksum-based deduplication
+- Calculate MD5 checksum and store metadata alongside image
+- Upload to S3 with consistent naming (git timestamp + git hash)
+- **Checksum-based deduplication**: Skip upload if identical content exists
+- **Archive on mismatch**: Moves existing files to archive/ with timestamp
 
 ### 3. Pointer Manager (`s3dock tag`)
 - Update pointer JSON files (production.json, staging.json)
@@ -79,6 +80,9 @@ s3dock config init
 ```
 s3://bucket/
     images/myapp/202507/myapp-20250721-2118-f7a5a27.tar.gz
+    images/myapp/202507/myapp-20250721-2118-f7a5a27.json
+    archive/myapp/202507/myapp-20250721-2118-f7a5a27-archived-on-20250722-1018.tar.gz
+    archive/myapp/202507/myapp-20250721-2118-f7a5a27-archived-on-20250722-1018.json
     pointers/myapp/production.json
     pointers/myapp/staging.json
     tags/myapp/v5.0.3.json
@@ -93,6 +97,12 @@ s3://bucket/
 - **Format**: `{app}:{YYYYMMDD-HHMM}-{git-hash}`
 - **Example**: `myapp:20250721-2118-f7a5a27`
 
+### Checksum-Based Deduplication
+- **MD5 verification**: Each image has metadata file with checksum and size
+- **Smart uploads**: Skip upload if identical content already exists
+- **Conflict resolution**: Archive existing files if checksums don't match
+- **Archive structure**: `archive/{app}/{yearmonth}/{filename}-archived-on-{timestamp}`
+
 ### Reproducible Builds
 - Same git commit = identical Docker tag
 - Perfect traceability between deployments and code
@@ -105,4 +115,5 @@ s3://bucket/
 - **Cost effective**: Storage-only costs, leverage S3 features (versioning, lifecycle)
 - **Clean builds**: Enforced clean repository prevents deployment surprises
 - **Simple pipelines**: Build → Push → Tag → Deploy workflow
-- **Future-ready**: Designed for checksum-based deduplication
+- **Efficient storage**: Checksum-based deduplication prevents duplicate uploads
+- **Conflict handling**: Automatic archiving when same tag has different content

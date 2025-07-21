@@ -11,3 +11,4 @@ Root paths:
 
     images:
     pointers: 
+	archive:
