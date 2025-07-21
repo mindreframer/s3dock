@@ -31,10 +31,10 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 	}
 
 	timestamp := time.Now().Format("20060102-1504")
-	
+
 	appName := ExtractAppName(imageRef)
 	yearMonth := time.Now().Format("200601")
-	
+
 	filename := fmt.Sprintf("%s-%s-%s.tar.gz", appName, timestamp, gitHash)
 	s3Key := fmt.Sprintf("images/%s/%s/%s", appName, yearMonth, filename)
 
@@ -59,18 +59,18 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 
 func ExtractAppName(imageRef string) string {
 	lastSlash := -1
-	
+
 	for i, c := range imageRef {
 		if c == '/' {
 			lastSlash = i
 		}
 	}
-	
+
 	start := 0
 	if lastSlash >= 0 {
 		start = lastSlash + 1
 	}
-	
+
 	end := len(imageRef)
 	for i := start; i < len(imageRef); i++ {
 		if imageRef[i] == ':' {
@@ -78,6 +78,6 @@ func ExtractAppName(imageRef string) string {
 			break
 		}
 	}
-	
+
 	return imageRef[start:end]
 }

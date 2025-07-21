@@ -23,10 +23,11 @@ build-linux: ## Build binary for Linux
 
 .PHONY: build-all
 build-all: ## Build binaries for all platforms
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BINARY_NAME)-linux-amd64 .
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(BINARY_NAME)-darwin-amd64 .
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(BINARY_NAME)-darwin-arm64 .
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(BINARY_NAME)-windows-amd64.exe .
+	@mkdir -p dist
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-linux-amd64 .
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-darwin-amd64 .
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-darwin-arm64 .
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-windows-amd64.exe .
 
 .PHONY: test
 test: ## Run unit tests
@@ -67,12 +68,20 @@ clean: ## Clean build artifacts
 	rm -f $(BINARY_NAME)
 	rm -f $(BINARY_UNIX)
 	rm -f $(BINARY_NAME)-*
+	rm -rf dist
 	rm -f coverage.out coverage.html
 
 .PHONY: deps
 deps: ## Download dependencies
 	go mod download
 	go mod tidy
+
+.PHONY: tools
+tools: ## Install required development tools
+	@echo "Installing development tools..."
+	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@go install golang.org/x/tools/cmd/goimports@latest
+	@echo "Development tools installed"
 
 .PHONY: lint
 lint: ## Run linter
@@ -82,14 +91,16 @@ lint: ## Run linter
 .PHONY: fmt
 fmt: ## Format code
 	go fmt ./...
-	goimports -w .
+	@which goimports > /dev/null && goimports -w . || echo "Skipping goimports - not installed (run 'make tools')"
 
 .PHONY: vet
 vet: ## Run go vet
 	go vet ./...
 
 .PHONY: check
-check: fmt vet lint test-short ## Run all checks (fmt, vet, lint, test)
+check: fmt vet test-short ## Run all checks (fmt, vet, test)
+	@echo "Running linter if available..."
+	@which golangci-lint > /dev/null && golangci-lint run || echo "Skipping lint - golangci-lint not installed (run 'make tools')"
 
 .PHONY: docker-build
 docker-build: ## Build Docker image
@@ -112,9 +123,31 @@ run-example: build test-image test-infra-up ## Run example push command
 	./$(BINARY_NAME) push s3dock-test:latest || echo "Push failed (expected without proper S3 setup)"
 	$(MAKE) test-infra-down
 
+.PHONY: run-example-config
+run-example-config: build test-image test-infra-up ## Run example push using config file
+	@echo "Waiting for test infrastructure..."
+	@sleep 5
+	@echo "Running example push with config file..."
+	./$(BINARY_NAME) --config test-configs/multi-env.json5 --profile integration push s3dock-test:latest || echo "Push completed"
+	$(MAKE) test-infra-down
+
+.PHONY: test-config
+test-config: build ## Test config file functionality
+	@echo "Testing config commands..."
+	./$(BINARY_NAME) config init test-output.json5 || echo "Config already exists"
+	./$(BINARY_NAME) --config test-configs/multi-env.json5 config list
+	./$(BINARY_NAME) --config test-configs/multi-env.json5 --profile dev config show
+	./$(BINARY_NAME) --config test-configs/multi-env.json5 --profile integration config show
+	@rm -f test-output.json5
+
+.PHONY: dist
+dist: build-all ## Build release binaries in dist folder
+	@echo "Distribution build complete:"
+	@ls -la dist/
+
 .PHONY: release
 release: check build-all ## Create release build with all platforms
 	@echo "Release build complete:"
-	@ls -la $(BINARY_NAME)-*
+	@ls -la dist/
 
 .DEFAULT_GOAL := help

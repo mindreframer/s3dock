@@ -1,0 +1,30 @@
+{
+  // Development configuration
+  "default_profile": "dev",
+  
+  "profiles": {
+    "dev": {
+      "bucket": "dev-s3dock-containers",
+      "region": "us-east-1",
+      "endpoint": "http://localhost:9000", // Local MinIO
+      "access_key": "testuser",
+      "secret_key": "testpass123"
+    }
+  },
+  
+  "docker": {
+    "timeout": "60s", // Longer timeout for dev
+    "compression": "gzip"
+  },
+  
+  "naming": {
+    "include_git_branch": true, // Include branch in dev builds
+    "timestamp_format": "20060102-1504",
+    "path_template": "images/{app}/{year_month}/{filename}"
+  },
+  
+  "defaults": {
+    "retry_count": 2,
+    "log_level": "debug" // Verbose logging in dev
+  }
+}

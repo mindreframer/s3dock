@@ -31,9 +31,9 @@ func NewS3Client(ctx context.Context) (*S3ClientImpl, error) {
 	} else {
 		client = s3.NewFromConfig(cfg)
 	}
-	
+
 	uploader := manager.NewUploader(client)
-	
+
 	return &S3ClientImpl{client: client, uploader: uploader}, nil
 }
 

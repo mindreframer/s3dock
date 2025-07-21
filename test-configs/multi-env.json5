@@ -1,0 +1,50 @@
+{
+  // Multi-environment configuration
+  "default_profile": "dev",
+  
+  "profiles": {
+    "dev": {
+      "bucket": "dev-containers",
+      "region": "us-east-1",
+      "endpoint": "http://localhost:9000",
+      "access_key": "testuser", 
+      "secret_key": "testpass123"
+    },
+    
+    "staging": {
+      "bucket": "staging-containers",
+      "region": "us-east-1"
+      // Uses AWS credentials chain
+    },
+    
+    "prod": {
+      "bucket": "prod-containers",
+      "region": "us-west-2"
+      // Uses IAM role
+    },
+    
+    "integration": {
+      "bucket": "s3dock-test",
+      "region": "us-east-1", 
+      "endpoint": "http://localhost:9000",
+      "access_key": "testuser",
+      "secret_key": "testpass123"
+    }
+  },
+  
+  "docker": {
+    "timeout": "30s",
+    "compression": "gzip"
+  },
+  
+  "naming": {
+    "include_git_branch": false,
+    "timestamp_format": "20060102-1504",
+    "path_template": "images/{app}/{year_month}/{filename}"
+  },
+  
+  "defaults": {
+    "retry_count": 3,
+    "log_level": "info"
+  }
+}

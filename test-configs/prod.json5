@@ -1,0 +1,34 @@
+{
+  // Production configuration
+  "default_profile": "prod",
+  
+  "profiles": {
+    "prod": {
+      "bucket": "prod-s3dock-containers",
+      "region": "us-west-2"
+      // No credentials - uses IAM role/instance profile
+    },
+    
+    "staging": {
+      "bucket": "staging-s3dock-containers", 
+      "region": "us-east-1"
+      // Also uses IAM for staging
+    }
+  },
+  
+  "docker": {
+    "timeout": "30s",
+    "compression": "gzip"
+  },
+  
+  "naming": {
+    "include_git_branch": false, // No branch names in prod
+    "timestamp_format": "20060102-1504", 
+    "path_template": "images/{app}/{year_month}/{filename}"
+  },
+  
+  "defaults": {
+    "retry_count": 3,
+    "log_level": "info"
+  }
+}

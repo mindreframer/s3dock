@@ -66,9 +66,9 @@ func TestImagePusher_Push_Success(t *testing.T) {
 	mockS3.On("Upload", mock.Anything, "test-bucket", mock.AnythingOfType("string"), mock.Anything).Return(nil)
 
 	pusher := NewImagePusher(mockDocker, mockS3, mockGit, "test-bucket")
-	
+
 	err := pusher.Push(context.Background(), "myapp:latest")
-	
+
 	assert.NoError(t, err)
 	mockGit.AssertExpectations(t)
 	mockDocker.AssertExpectations(t)
@@ -83,9 +83,9 @@ func TestImagePusher_Push_GitError(t *testing.T) {
 	mockGit.On("GetCurrentHash").Return("", errors.New("git error"))
 
 	pusher := NewImagePusher(mockDocker, mockS3, mockGit, "test-bucket")
-	
+
 	err := pusher.Push(context.Background(), "myapp:latest")
-	
+
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get git hash")
 	mockGit.AssertExpectations(t)
@@ -100,9 +100,9 @@ func TestImagePusher_Push_DockerError(t *testing.T) {
 	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(io.NopCloser(strings.NewReader("")), errors.New("docker error"))
 
 	pusher := NewImagePusher(mockDocker, mockS3, mockGit, "test-bucket")
-	
+
 	err := pusher.Push(context.Background(), "myapp:latest")
-	
+
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to export image")
 	mockGit.AssertExpectations(t)
