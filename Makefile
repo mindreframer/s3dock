@@ -41,7 +41,7 @@ test-short: ## Run unit tests (short mode)
 test-integration: test-infra-up ## Run integration tests
 	@echo "Waiting for test infrastructure..."
 	@sleep 5
-	INTEGRATION_TEST=1 go test -v ./... -run Integration
+	INTEGRATION_TEST=1 go test -tags integration -v ./... -run Integration
 	$(MAKE) test-infra-down
 
 .PHONY: test-coverage
