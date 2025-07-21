@@ -59,5 +59,15 @@ func (g *GitClientImpl) IsRepositoryDirty(path string) (bool, error) {
 		return false, err
 	}
 
-	return !status.IsClean(), nil
+	// Check if there are any actual modifications (not just untracked files)
+	hasModifications := false
+	for _, fileStatus := range status {
+		// Only consider files that have actual modifications (not just untracked)
+		if fileStatus.Worktree != git.Untracked && fileStatus.Worktree != git.Unmodified {
+			hasModifications = true
+			break
+		}
+	}
+
+	return hasModifications, nil
 }
