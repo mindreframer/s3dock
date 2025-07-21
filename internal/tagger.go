@@ -10,12 +10,15 @@ import (
 type ImageTagger struct {
 	s3     S3Client
 	bucket string
+	audit  AuditLogger
 }
 
 func NewImageTagger(s3Client S3Client, bucket string) *ImageTagger {
+	auditLogger := NewS3AuditLogger(s3Client, bucket)
 	return &ImageTagger{
 		s3:     s3Client,
 		bucket: bucket,
+		audit:  auditLogger,
 	}
 }
 
@@ -58,18 +61,28 @@ func (t *ImageTagger) Tag(ctx context.Context, imageRef, version string) error {
 	}
 
 	fmt.Printf("Successfully tagged %s as %s\n", imageRef, version)
+	
+	// Log audit event for tag creation
+	auditEvent, err := CreateTagEvent(appName, gitHash, gitTime, imageRef, version, tagKey)
+	if err == nil {
+		t.audit.LogEvent(ctx, auditEvent)
+	}
+	
 	return nil
 }
 
 type ImagePromoter struct {
 	s3     S3Client
 	bucket string
+	audit  AuditLogger
 }
 
 func NewImagePromoter(s3Client S3Client, bucket string) *ImagePromoter {
+	auditLogger := NewS3AuditLogger(s3Client, bucket)
 	return &ImagePromoter{
 		s3:     s3Client,
 		bucket: bucket,
+		audit:  auditLogger,
 	}
 }
 
@@ -113,8 +126,22 @@ func (p *ImagePromoter) Promote(ctx context.Context, source, environment string)
 		return fmt.Errorf("promoting from version tags requires specifying app name - use 'appname:version' format or direct image reference")
 	}
 
-	// Upload pointer to environment
+	// Check for existing pointer to track previous state
 	envKey := GeneratePointerKey(appName, environment)
+	var previousTarget string
+	
+	existingExists, err := p.s3.Exists(ctx, p.bucket, envKey)
+	if err == nil && existingExists {
+		existingData, err := p.s3.Download(ctx, p.bucket, envKey)
+		if err == nil {
+			existingPointer, err := PointerMetadataFromJSON(existingData)
+			if err == nil {
+				previousTarget = existingPointer.TargetPath
+			}
+		}
+	}
+
+	// Upload pointer to environment
 	pointerJSON, err := pointer.ToJSON()
 	if err != nil {
 		return fmt.Errorf("failed to serialize environment pointer: %w", err)
@@ -125,6 +152,13 @@ func (p *ImagePromoter) Promote(ctx context.Context, source, environment string)
 	}
 
 	fmt.Printf("Successfully promoted %s to %s environment\n", source, environment)
+	
+	// Log audit event for promotion  
+	auditEvent, err := CreatePromotionEvent(appName, pointer.GitHash, pointer.GitTime, environment, source, "image", envKey, previousTarget)
+	if err == nil {
+		p.audit.LogEvent(ctx, auditEvent)
+	}
+	
 	return nil
 }
 
@@ -156,8 +190,22 @@ func (p *ImagePromoter) PromoteFromTag(ctx context.Context, appName, version, en
 		return fmt.Errorf("failed to create environment pointer: %w", err)
 	}
 
-	// Upload environment pointer
+	// Check for existing pointer to track previous state
 	envKey := GeneratePointerKey(appName, environment)
+	var previousTarget string
+	
+	existingExists, err := p.s3.Exists(ctx, p.bucket, envKey)
+	if err == nil && existingExists {
+		existingData, err := p.s3.Download(ctx, p.bucket, envKey)
+		if err == nil {
+			existingPointer, err := PointerMetadataFromJSON(existingData)
+			if err == nil {
+				previousTarget = existingPointer.TargetPath
+			}
+		}
+	}
+
+	// Upload environment pointer
 	pointerJSON, err := envPointer.ToJSON()
 	if err != nil {
 		return fmt.Errorf("failed to serialize environment pointer: %w", err)
@@ -168,5 +216,13 @@ func (p *ImagePromoter) PromoteFromTag(ctx context.Context, appName, version, en
 	}
 
 	fmt.Printf("Successfully promoted %s %s to %s environment\n", appName, version, environment)
+	
+	// Log audit event for tag-based promotion
+	sourceRef := fmt.Sprintf("%s:%s", appName, version)
+	auditEvent, err := CreatePromotionEvent(appName, tagPointer.GitHash, tagPointer.GitTime, environment, sourceRef, "tag", envKey, previousTarget)
+	if err == nil {
+		p.audit.LogEvent(ctx, auditEvent)
+	}
+	
 	return nil
 }

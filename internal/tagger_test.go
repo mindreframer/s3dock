@@ -22,6 +22,11 @@ func TestImageTagger_Tag_Success(t *testing.T) {
 	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasPrefix(key, "tags/") && strings.HasSuffix(key, ".json")
 	}), mock.Anything).Return(nil)
+	
+	// Mock audit log upload
+	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
+		return strings.HasPrefix(key, "audit/") && strings.Contains(key, "tag")
+	}), mock.Anything).Return(nil)
 
 	tagger := NewImageTagger(mockS3, "test-bucket")
 
@@ -64,9 +69,19 @@ func TestImagePromoter_Promote_DirectImage_Success(t *testing.T) {
 		return strings.HasSuffix(key, ".tar.gz") && strings.HasPrefix(key, "images/")
 	})).Return(true, nil)
 
+	// Mock checking for existing pointer (for audit trail)
+	mockS3.On("Exists", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
+		return strings.HasPrefix(key, "pointers/")
+	})).Return(false, nil)
+
 	// Mock environment pointer upload
 	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasPrefix(key, "pointers/") && strings.HasSuffix(key, ".json")
+	}), mock.Anything).Return(nil)
+	
+	// Mock audit log upload
+	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
+		return strings.HasPrefix(key, "audit/") && strings.Contains(key, "promotion")
 	}), mock.Anything).Return(nil)
 
 	promoter := NewImagePromoter(mockS3, "test-bucket")
@@ -109,8 +124,16 @@ func TestImagePromoter_PromoteFromTag_Success(t *testing.T) {
 	tagJSON, _ := tagPointer.ToJSON()
 	mockS3.On("Download", mock.Anything, "test-bucket", "tags/myapp/v1.2.0.json").Return(tagJSON, nil)
 
+	// Mock checking for existing pointer (for audit trail) 
+	mockS3.On("Exists", mock.Anything, "test-bucket", "pointers/myapp/staging.json").Return(false, nil)
+
 	// Mock environment pointer upload
 	mockS3.On("Upload", mock.Anything, "test-bucket", "pointers/myapp/staging.json", mock.Anything).Return(nil)
+	
+	// Mock audit log upload
+	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
+		return strings.HasPrefix(key, "audit/") && strings.Contains(key, "promotion")
+	}), mock.Anything).Return(nil)
 
 	promoter := NewImagePromoter(mockS3, "test-bucket")
 

@@ -112,6 +112,11 @@ func TestImagePusher_Push_Success_NewImage(t *testing.T) {
 	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".json") && strings.HasPrefix(key, "images/")
 	}), mock.Anything).Return(nil)
+	
+	// Mock audit log upload
+	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
+		return strings.HasPrefix(key, "audit/") && strings.Contains(key, "push")
+	}), mock.Anything).Return(nil)
 
 	pusher := NewImagePusher(mockDocker, mockS3, mockGit, "test-bucket")
 
@@ -146,6 +151,11 @@ func TestImagePusher_Push_Success_ExistingSameChecksum(t *testing.T) {
 	mockS3.On("Download", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".json") && strings.HasPrefix(key, "images/")
 	})).Return(metadataJSON, nil)
+	
+	// Mock audit log upload for skipped push
+	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
+		return strings.HasPrefix(key, "audit/") && strings.Contains(key, "push")
+	}), mock.Anything).Return(nil)
 
 	pusher := NewImagePusher(mockDocker, mockS3, mockGit, "test-bucket")
 
@@ -209,6 +219,11 @@ func TestImagePusher_Push_Success_ChecksumMismatch(t *testing.T) {
 	}), mock.Anything).Return(nil)
 	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".json") && strings.HasPrefix(key, "images/")
+	}), mock.Anything).Return(nil)
+	
+	// Mock audit log upload for push with archive
+	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
+		return strings.HasPrefix(key, "audit/") && strings.Contains(key, "push")
 	}), mock.Anything).Return(nil)
 
 	pusher := NewImagePusher(mockDocker, mockS3, mockGit, "test-bucket")

@@ -102,6 +102,11 @@ s3://bucket/
     pointers/myapp/production.json      ← Environment pointers
     pointers/myapp/staging.json
     
+    audit/myapp/202507/                 ← Audit trail by month
+        20250721-1400-push-f7a5a27.json      ← Push events
+        20250721-1430-tag-f7a5a27.json       ← Tag events  
+        20250721-2118-promotion-f7a5a27.json ← Promotion events
+    
     archive/myapp/202507/myapp-20250721-2118-f7a5a27-archived-on-20250722-1018.tar.gz
     archive/myapp/202507/myapp-20250721-2118-f7a5a27-archived-on-20250722-1018.json
 ```
@@ -122,6 +127,13 @@ s3://bucket/
 - **Pointer indirection**: Environments can point to images OR tags
 - **Audit trail**: Who promoted what and when
 
+### Complete Audit Trail
+- **Event tracking**: Push, tag, and promotion events logged with full context
+- **Previous state**: Tracks what was replaced during promotions
+- **Structured storage**: `audit/{app}/{YYYYMM}/{timestamp}-{event}-{githash}.json`
+- **User attribution**: Records who performed each action
+- **Scalable queries**: Monthly folders prevent S3 performance issues
+
 ### Checksum-Based Deduplication
 - **MD5 verification**: Each image has metadata file with checksum and size
 - **Smart uploads**: Skip upload if identical content already exists
@@ -140,5 +152,7 @@ s3://bucket/
 - **Cost effective**: Storage-only costs, leverage S3 features (versioning, lifecycle)
 - **Clean builds**: Enforced clean repository prevents deployment surprises
 - **Simple pipelines**: Build → Push → Tag → Deploy workflow
+- **Complete audit trail**: Every push, tag, and promotion event logged
 - **Efficient storage**: Checksum-based deduplication prevents duplicate uploads
 - **Conflict handling**: Automatic archiving when same tag has different content
+- **S3 performance**: Audit logs organized by month for scalable queries
