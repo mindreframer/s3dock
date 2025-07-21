@@ -21,23 +21,29 @@ s3dock stores Docker images as tar.gz files in S3 buckets with pointer files for
 - **Checksum-based deduplication**: Skip upload if identical content exists
 - **Archive on mismatch**: Moves existing files to archive/ with timestamp
 
-### 3. Pointer Manager (`s3dock tag`)
-- Update pointer JSON files (production.json, staging.json)
-- Atomic updates with versioning
-- Rollback capability
+### 3. Semantic Tagger (`s3dock tag`)
+- Create version tags pointing to specific images
+- Out-of-order versioning supported (v1.1.5 after v1.2.0)
+- Stores git metadata and audit trail
 
-### 4. Image Puller (`s3dock pull`)
+### 4. Environment Promoter (`s3dock promote`)
+- Promote images directly to environments
+- Promote via semantic version tags
+- Atomic pointer updates with metadata
+- Supports both direct and indirect references
+
+### 5. Image Puller (`s3dock pull`)
 - Download pointer file from S3
 - Parse target image path
 - Download and import tar.gz into Docker
 - Cleanup old images
 
-### 5. Registry CLI (`s3dock`)
-- Unified interface: build, push, tag, pull, list, cleanup
+### 6. Registry CLI (`s3dock`)
+- Unified interface: build, push, tag, promote, pull, list, cleanup
 - Configuration management
 - Profile-based configurations
 
-### 6. Blue-Green Deployment (`s3dock deploy`)
+### 7. Blue-Green Deployment (`s3dock deploy`)
 - Environment state tracking
 - Health checking before traffic switch
 - Traffic switching via load balancer updates
@@ -53,9 +59,17 @@ s3dock build myapp --dockerfile Dockerfile.prod --context ./backend
 # Push built image to S3
 s3dock push myapp:20250721-2118-f7a5a27
 
-# Tag image for environments
-s3dock tag myapp:20250721-2118-f7a5a27 production
-s3dock tag myapp:20250721-2118-f7a5a27 staging
+# Create semantic version tags
+s3dock tag myapp:20250721-2118-f7a5a27 v1.2.0
+s3dock tag myapp:20250720-1045-def5678 v1.1.5
+
+# Promote images to environments (direct)
+s3dock promote myapp:20250721-2118-f7a5a27 production
+s3dock promote myapp:20250720-1045-def5678 staging
+
+# Promote via semantic versions
+s3dock promote myapp v1.2.0 production
+s3dock promote myapp v1.1.5 staging
 
 # Pull image from environment
 s3dock pull myapp production
@@ -81,11 +95,15 @@ s3dock config init
 s3://bucket/
     images/myapp/202507/myapp-20250721-2118-f7a5a27.tar.gz
     images/myapp/202507/myapp-20250721-2118-f7a5a27.json
+    
+    tags/myapp/v1.2.0.json              ← Semantic version tags
+    tags/myapp/v1.1.5.json
+    
+    pointers/myapp/production.json      ← Environment pointers
+    pointers/myapp/staging.json
+    
     archive/myapp/202507/myapp-20250721-2118-f7a5a27-archived-on-20250722-1018.tar.gz
     archive/myapp/202507/myapp-20250721-2118-f7a5a27-archived-on-20250722-1018.json
-    pointers/myapp/production.json
-    pointers/myapp/staging.json
-    tags/myapp/v5.0.3.json
 ```
 
 ## Key Features
@@ -96,6 +114,13 @@ s3://bucket/
 - **Clean repo enforcement**: Prevents builds with uncommitted changes
 - **Format**: `{app}:{YYYYMMDD-HHMM}-{git-hash}`
 - **Example**: `myapp:20250721-2118-f7a5a27`
+
+### Semantic Versioning & Environment Promotion
+- **Flexible tagging**: Assign semantic versions out-of-order
+- **Direct promotion**: `myapp:20250721-2118-f7a5a27` → `production`
+- **Tag-based promotion**: `myapp v1.2.0` → `staging`
+- **Pointer indirection**: Environments can point to images OR tags
+- **Audit trail**: Who promoted what and when
 
 ### Checksum-Based Deduplication
 - **MD5 verification**: Each image has metadata file with checksum and size

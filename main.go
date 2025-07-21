@@ -39,7 +39,9 @@ func main() {
 	case "config":
 		handleConfigCommand(globalFlags, commandArgs)
 	case "tag":
-		fmt.Println("Tag functionality not yet implemented")
+		handleTagCommand(globalFlags, commandArgs)
+	case "promote":
+		handlePromoteCommand(globalFlags, commandArgs)
 	case "pull":
 		fmt.Println("Pull functionality not yet implemented")
 	case "list":
@@ -66,9 +68,11 @@ func printUsage() {
 	fmt.Println("  --bucket <name>   Override bucket name")
 	fmt.Println("")
 	fmt.Println("Commands:")
-	fmt.Println("  build <app-name>  Build Docker image with git-based tag")
-	fmt.Println("  push <image:tag>  Push Docker image to S3")
-	fmt.Println("  config            Config file management")
+	fmt.Println("  build <app-name>    Build Docker image with git-based tag")
+	fmt.Println("  push <image:tag>    Push Docker image to S3")
+	fmt.Println("  tag <image> <ver>   Create semantic version tag")
+	fmt.Println("  promote <src> <env> Promote image/tag to environment")
+	fmt.Println("  config              Config file management")
 	fmt.Println("  tag               Tag functionality (not implemented)")
 	fmt.Println("  pull              Pull functionality (not implemented)")
 	fmt.Println("  list              List functionality (not implemented)")
@@ -79,6 +83,9 @@ func printUsage() {
 	fmt.Println("  s3dock build myapp")
 	fmt.Println("  s3dock build myapp --dockerfile Dockerfile.prod")
 	fmt.Println("  s3dock push myapp:20250721-2118-f7a5a27")
+	fmt.Println("  s3dock tag myapp:20250721-2118-f7a5a27 v1.2.0")
+	fmt.Println("  s3dock promote myapp:20250721-2118-f7a5a27 production")
+	fmt.Println("  s3dock promote myapp v1.2.0 staging")
 	fmt.Println("  s3dock --profile dev push myapp:latest")
 	fmt.Println("  s3dock --config ./test.json5 push myapp:latest")
 	fmt.Println("  s3dock config show")
@@ -364,4 +371,150 @@ func buildImageWithConfig(appName, contextPath, dockerfile string) error {
 
 	_, err = builder.Build(ctx, appName, contextPath, dockerfile)
 	return err
+}
+
+func handleTagCommand(globalFlags *GlobalFlags, args []string) {
+	if len(args) < 2 {
+		fmt.Println("Usage: s3dock [global-flags] tag <image:tag> <version>")
+		fmt.Println("")
+		fmt.Println("Create a semantic version tag for an image.")
+		fmt.Println("")
+		fmt.Println("Examples:")
+		fmt.Println("  s3dock tag myapp:20250721-2118-f7a5a27 v1.2.0")
+		fmt.Println("  s3dock tag myapp:20250720-1045-def5678 v1.1.5")
+		return
+	}
+
+	imageRef := args[0]
+	version := args[1]
+
+	resolved, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
+	if err != nil {
+		fmt.Printf("Error loading config: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := tagImageWithConfig(imageRef, version, resolved); err != nil {
+		fmt.Printf("Error tagging image: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func handlePromoteCommand(globalFlags *GlobalFlags, args []string) {
+	if len(args) < 2 {
+		fmt.Println("Usage: s3dock [global-flags] promote <source> <environment>")
+		fmt.Println("   or: s3dock [global-flags] promote <app> <version> <environment>")
+		fmt.Println("")
+		fmt.Println("Promote an image or tag to an environment.")
+		fmt.Println("")
+		fmt.Println("Examples:")
+		fmt.Println("  s3dock promote myapp:20250721-2118-f7a5a27 production")
+		fmt.Println("  s3dock promote myapp v1.2.0 staging")
+		return
+	}
+
+	var source, environment, appName, version string
+	if len(args) == 2 {
+		// Direct image promotion: s3dock promote myapp:20250721-2118-f7a5a27 production
+		source = args[0]
+		environment = args[1]
+	} else if len(args) == 3 {
+		// Tag-based promotion: s3dock promote myapp v1.2.0 staging
+		appName = args[0]
+		version = args[1]
+		environment = args[2]
+	} else {
+		fmt.Println("Invalid number of arguments")
+		os.Exit(1)
+	}
+
+	resolved, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
+	if err != nil {
+		fmt.Printf("Error loading config: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(args) == 2 {
+		if err := promoteImageWithConfig(source, environment, resolved); err != nil {
+			fmt.Printf("Error promoting image: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		if err := promoteTagWithConfig(appName, version, environment, resolved); err != nil {
+			fmt.Printf("Error promoting tag: %v\n", err)
+			os.Exit(1)
+		}
+	}
+}
+
+func tagImageWithConfig(imageRef, version string, config *internal.ResolvedConfig) error {
+	ctx := context.Background()
+
+	os.Setenv("AWS_REGION", config.Region)
+	if config.Endpoint != "" {
+		os.Setenv("AWS_ENDPOINT_URL", config.Endpoint)
+	}
+	if config.AccessKey != "" {
+		os.Setenv("AWS_ACCESS_KEY_ID", config.AccessKey)
+	}
+	if config.SecretKey != "" {
+		os.Setenv("AWS_SECRET_ACCESS_KEY", config.SecretKey)
+	}
+
+	s3Client, err := internal.NewS3Client(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create S3 client: %w", err)
+	}
+
+	tagger := internal.NewImageTagger(s3Client, config.Bucket)
+
+	return tagger.Tag(ctx, imageRef, version)
+}
+
+func promoteImageWithConfig(source, environment string, config *internal.ResolvedConfig) error {
+	ctx := context.Background()
+
+	os.Setenv("AWS_REGION", config.Region)
+	if config.Endpoint != "" {
+		os.Setenv("AWS_ENDPOINT_URL", config.Endpoint)
+	}
+	if config.AccessKey != "" {
+		os.Setenv("AWS_ACCESS_KEY_ID", config.AccessKey)
+	}
+	if config.SecretKey != "" {
+		os.Setenv("AWS_SECRET_ACCESS_KEY", config.SecretKey)
+	}
+
+	s3Client, err := internal.NewS3Client(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create S3 client: %w", err)
+	}
+
+	promoter := internal.NewImagePromoter(s3Client, config.Bucket)
+
+	return promoter.Promote(ctx, source, environment)
+}
+
+func promoteTagWithConfig(appName, version, environment string, config *internal.ResolvedConfig) error {
+	ctx := context.Background()
+
+	os.Setenv("AWS_REGION", config.Region)
+	if config.Endpoint != "" {
+		os.Setenv("AWS_ENDPOINT_URL", config.Endpoint)
+	}
+	if config.AccessKey != "" {
+		os.Setenv("AWS_ACCESS_KEY_ID", config.AccessKey)
+	}
+	if config.SecretKey != "" {
+		os.Setenv("AWS_SECRET_ACCESS_KEY", config.SecretKey)
+	}
+
+	s3Client, err := internal.NewS3Client(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create S3 client: %w", err)
+	}
+
+	promoter := internal.NewImagePromoter(s3Client, config.Bucket)
+
+	return promoter.PromoteFromTag(ctx, appName, version, environment)
 }
