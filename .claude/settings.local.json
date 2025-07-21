@@ -9,7 +9,9 @@
       "Bash(docker build:*)",
       "Bash(docker compose:*)",
       "Bash(S3DOCK_BUCKET=s3dock-test ./s3dock push:*)",
-      "Bash(make:*)"
+      "Bash(make:*)",
+      "WebFetch(domain:pkg.go.dev)",
+      "Bash(./dist/s3dock-darwin-arm64:*)"
     ],
     "deny": []
   }
