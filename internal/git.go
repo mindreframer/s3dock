@@ -10,8 +10,8 @@ func NewGitClient() *GitClientImpl {
 	return &GitClientImpl{}
 }
 
-func (g *GitClientImpl) GetCurrentHash() (string, error) {
-	repo, err := git.PlainOpen(".")
+func (g *GitClientImpl) GetCurrentHash(path string) (string, error) {
+	repo, err := git.PlainOpen(path)
 	if err != nil {
 		return "", err
 	}
@@ -24,8 +24,8 @@ func (g *GitClientImpl) GetCurrentHash() (string, error) {
 	return ref.Hash().String()[:7], nil
 }
 
-func (g *GitClientImpl) GetCommitTimestamp() (string, error) {
-	repo, err := git.PlainOpen(".")
+func (g *GitClientImpl) GetCommitTimestamp(path string) (string, error) {
+	repo, err := git.PlainOpen(path)
 	if err != nil {
 		return "", err
 	}
@@ -43,8 +43,8 @@ func (g *GitClientImpl) GetCommitTimestamp() (string, error) {
 	return commit.Committer.When.Format("20060102-1504"), nil
 }
 
-func (g *GitClientImpl) IsRepositoryDirty() (bool, error) {
-	repo, err := git.PlainOpen(".")
+func (g *GitClientImpl) IsRepositoryDirty(path string) (bool, error) {
+	repo, err := git.PlainOpen(path)
 	if err != nil {
 		return false, err
 	}

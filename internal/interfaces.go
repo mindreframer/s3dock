@@ -19,7 +19,7 @@ type S3Client interface {
 }
 
 type GitClient interface {
-	GetCurrentHash() (string, error)
-	GetCommitTimestamp() (string, error)
-	IsRepositoryDirty() (bool, error)
+	GetCurrentHash(path string) (string, error)
+	GetCommitTimestamp(path string) (string, error)
+	IsRepositoryDirty(path string) (bool, error)
 }

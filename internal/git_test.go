@@ -9,7 +9,7 @@ import (
 func TestGitClient_GetCurrentHash(t *testing.T) {
 	client := NewGitClient()
 
-	hash, err := client.GetCurrentHash()
+	hash, err := client.GetCurrentHash(".")
 
 	if err != nil {
 		t.Skip("Git repository not found - skipping test")

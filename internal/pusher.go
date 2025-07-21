@@ -31,13 +31,13 @@ func NewImagePusher(docker DockerClient, s3 S3Client, git GitClient, bucket stri
 func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 	LogInfo("Pushing image %s to S3", imageRef)
 
-	gitHash, err := p.git.GetCurrentHash()
+	gitHash, err := p.git.GetCurrentHash(".")
 	if err != nil {
 		LogError("Failed to get git hash: %v", err)
 		return fmt.Errorf("failed to get git hash: %w", err)
 	}
 
-	gitTime, err := p.git.GetCommitTimestamp()
+	gitTime, err := p.git.GetCommitTimestamp(".")
 	if err != nil {
 		LogError("Failed to get git timestamp: %v", err)
 		return fmt.Errorf("failed to get git timestamp: %w", err)

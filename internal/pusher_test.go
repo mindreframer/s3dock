@@ -58,18 +58,18 @@ type MockGitClient struct {
 	mock.Mock
 }
 
-func (m *MockGitClient) GetCurrentHash() (string, error) {
-	args := m.Called()
+func (m *MockGitClient) GetCurrentHash(path string) (string, error) {
+	args := m.Called(path)
 	return args.String(0), args.Error(1)
 }
 
-func (m *MockGitClient) GetCommitTimestamp() (string, error) {
-	args := m.Called()
+func (m *MockGitClient) GetCommitTimestamp(path string) (string, error) {
+	args := m.Called(path)
 	return args.String(0), args.Error(1)
 }
 
-func (m *MockGitClient) IsRepositoryDirty() (bool, error) {
-	args := m.Called()
+func (m *MockGitClient) IsRepositoryDirty(path string) (bool, error) {
+	args := m.Called(path)
 	return args.Bool(0), args.Error(1)
 }
 
@@ -96,8 +96,8 @@ func TestImagePusher_Push_Success_NewImage(t *testing.T) {
 	mockS3 := new(MockS3Client)
 	mockGit := new(MockGitClient)
 
-	mockGit.On("GetCurrentHash").Return("abc1234", nil)
-	mockGit.On("GetCommitTimestamp").Return("20250721-1430", nil)
+	mockGit.On("GetCurrentHash", mock.Anything).Return("abc1234", nil)
+	mockGit.On("GetCommitTimestamp", mock.Anything).Return("20250721-1430", nil)
 	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(io.NopCloser(strings.NewReader("image data")), nil)
 
 	// Metadata doesn't exist (new image)
@@ -133,8 +133,8 @@ func TestImagePusher_Push_Success_ExistingSameChecksum(t *testing.T) {
 	mockS3 := new(MockS3Client)
 	mockGit := new(MockGitClient)
 
-	mockGit.On("GetCurrentHash").Return("abc1234", nil)
-	mockGit.On("GetCommitTimestamp").Return("20250721-1430", nil)
+	mockGit.On("GetCurrentHash", mock.Anything).Return("abc1234", nil)
+	mockGit.On("GetCommitTimestamp", mock.Anything).Return("20250721-1430", nil)
 	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(io.NopCloser(strings.NewReader("image data")), nil)
 
 	// Metadata exists
@@ -172,7 +172,7 @@ func TestImagePusher_Push_GitError(t *testing.T) {
 	mockS3 := new(MockS3Client)
 	mockGit := new(MockGitClient)
 
-	mockGit.On("GetCurrentHash").Return("", errors.New("git error"))
+	mockGit.On("GetCurrentHash", mock.Anything).Return("", errors.New("git error"))
 
 	pusher := NewImagePusher(mockDocker, mockS3, mockGit, "test-bucket")
 
@@ -188,8 +188,8 @@ func TestImagePusher_Push_Success_ChecksumMismatch(t *testing.T) {
 	mockS3 := new(MockS3Client)
 	mockGit := new(MockGitClient)
 
-	mockGit.On("GetCurrentHash").Return("abc1234", nil)
-	mockGit.On("GetCommitTimestamp").Return("20250721-1430", nil)
+	mockGit.On("GetCurrentHash", mock.Anything).Return("abc1234", nil)
+	mockGit.On("GetCommitTimestamp", mock.Anything).Return("20250721-1430", nil)
 	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(io.NopCloser(strings.NewReader("new image data")), nil)
 
 	// Metadata exists
@@ -241,8 +241,8 @@ func TestImagePusher_Push_DockerError(t *testing.T) {
 	mockS3 := new(MockS3Client)
 	mockGit := new(MockGitClient)
 
-	mockGit.On("GetCurrentHash").Return("abc1234", nil)
-	mockGit.On("GetCommitTimestamp").Return("20250721-1430", nil)
+	mockGit.On("GetCurrentHash", mock.Anything).Return("abc1234", nil)
+	mockGit.On("GetCommitTimestamp", mock.Anything).Return("20250721-1430", nil)
 	mockS3.On("Exists", mock.Anything, "test-bucket", mock.AnythingOfType("string")).Return(false, nil)
 	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(io.NopCloser(strings.NewReader("")), errors.New("docker error"))
 

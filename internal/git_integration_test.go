@@ -219,7 +219,7 @@ func NewGitClientWithDir(dir string) *GitClientWithDir {
 	return &GitClientWithDir{dir: dir}
 }
 
-func (g *GitClientWithDir) GetCurrentHash() (string, error) {
+func (g *GitClientWithDir) GetCurrentHash(path string) (string, error) {
 	repo, err := git.PlainOpen(g.dir)
 	if err != nil {
 		return "", err
@@ -233,7 +233,7 @@ func (g *GitClientWithDir) GetCurrentHash() (string, error) {
 	return ref.Hash().String()[:7], nil
 }
 
-func (g *GitClientWithDir) GetCommitTimestamp() (string, error) {
+func (g *GitClientWithDir) GetCommitTimestamp(path string) (string, error) {
 	repo, err := git.PlainOpen(g.dir)
 	if err != nil {
 		return "", err
@@ -252,7 +252,7 @@ func (g *GitClientWithDir) GetCommitTimestamp() (string, error) {
 	return commit.Committer.When.Format("20060102-1504"), nil
 }
 
-func (g *GitClientWithDir) IsRepositoryDirty() (bool, error) {
+func (g *GitClientWithDir) IsRepositoryDirty(path string) (bool, error) {
 	repo, err := git.PlainOpen(g.dir)
 	if err != nil {
 		return false, err
@@ -282,7 +282,7 @@ func TestIntegration_GitClient_DirectOperations(t *testing.T) {
 	gitClient := NewGitClientWithDir(repoDir)
 
 	// Test GetCurrentHash
-	hash, err := gitClient.GetCurrentHash()
+	hash, err := gitClient.GetCurrentHash(repoDir)
 	if err != nil {
 		t.Fatalf("GetCurrentHash failed: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestIntegration_GitClient_DirectOperations(t *testing.T) {
 	logf(t, 2, "Git hash: %s", hash)
 
 	// Test GetCommitTimestamp
-	timestamp, err := gitClient.GetCommitTimestamp()
+	timestamp, err := gitClient.GetCommitTimestamp(repoDir)
 	if err != nil {
 		t.Fatalf("GetCommitTimestamp failed: %v", err)
 	}
@@ -303,7 +303,7 @@ func TestIntegration_GitClient_DirectOperations(t *testing.T) {
 	logf(t, 2, "Git timestamp: %s", timestamp)
 
 	// Test IsRepositoryDirty - should be clean
-	isDirty, err := gitClient.IsRepositoryDirty()
+	isDirty, err := gitClient.IsRepositoryDirty(repoDir)
 	if err != nil {
 		t.Fatalf("IsRepositoryDirty failed: %v", err)
 	}
@@ -336,7 +336,7 @@ func TestIntegration_Build_CleanRepo_Succeeds(t *testing.T) {
 
 	ctx := context.Background()
 	appName := "myapp"
-	tag, err := builder.Build(ctx, appName, repoDir, "Dockerfile")
+	tag, err := builder.Build(ctx, appName, repoDir, "Dockerfile", repoDir)
 	if err != nil {
 		t.Fatalf("build failed: %v", err)
 	}
@@ -375,7 +375,7 @@ func TestIntegration_Build_DirtyRepo_Fails(t *testing.T) {
 
 	ctx := context.Background()
 	appName := "myapp"
-	_, err = builder.Build(ctx, appName, repoDir, "Dockerfile")
+	_, err = builder.Build(ctx, appName, repoDir, "Dockerfile", repoDir)
 	if err == nil {
 		t.Fatalf("expected build to fail with dirty repository, but it succeeded")
 	}
@@ -411,7 +411,7 @@ func TestIntegration_Build_ModifiedDockerfile_DetectsDirty(t *testing.T) {
 	appName := "myapp"
 
 	// First build should succeed
-	tag1, err := builder.Build(ctx, appName, repoDir, "Dockerfile")
+	tag1, err := builder.Build(ctx, appName, repoDir, "Dockerfile", repoDir)
 	if err != nil {
 		t.Fatalf("first build failed: %v", err)
 	}
@@ -421,7 +421,7 @@ func TestIntegration_Build_ModifiedDockerfile_DetectsDirty(t *testing.T) {
 	modifyExistingFile(t, repoDir)
 
 	// Second build should fail due to dirty state
-	_, err = builder.Build(ctx, appName, repoDir, "Dockerfile")
+	_, err = builder.Build(ctx, appName, repoDir, "Dockerfile", repoDir)
 	if err == nil {
 		t.Fatalf("expected build to fail with modified Dockerfile, but it succeeded")
 	}
@@ -460,7 +460,7 @@ func TestIntegration_Build_MultipleCommits_TagFormat(t *testing.T) {
 
 	ctx := context.Background()
 	appName := "testapp"
-	tag, err := builder.Build(ctx, appName, repoDir, "Dockerfile")
+	tag, err := builder.Build(ctx, appName, repoDir, "Dockerfile", repoDir)
 	if err != nil {
 		t.Fatalf("build failed: %v", err)
 	}

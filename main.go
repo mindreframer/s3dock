@@ -88,6 +88,7 @@ func printUsage() {
 	fmt.Println("")
 	fmt.Println("Examples:")
 	fmt.Println("  s3dock build myapp")
+	fmt.Println("  s3dock build myapp --path /path/to/repo")
 	fmt.Println("  s3dock build myapp --dockerfile Dockerfile.prod")
 	fmt.Println("  s3dock push myapp:20250721-2118-f7a5a27")
 	fmt.Println("  s3dock tag myapp:20250721-2118-f7a5a27 v1.2.0")
@@ -339,11 +340,21 @@ func handleBuildCommand(globalFlags *GlobalFlags, args []string) {
 		fmt.Println("Build a Docker image with git-based tag.")
 		fmt.Println("")
 		fmt.Println("Build Flags:")
+		fmt.Println("  --path <directory>   Git repository path (default: .)")
 		fmt.Println("  --dockerfile <path>  Dockerfile to use (default: Dockerfile)")
 		fmt.Println("  --context <path>     Build context path (default: .)")
 		fmt.Println("")
+		fmt.Println("Note: If --path is specified but --context is not, both will use the same path.")
+		fmt.Println("")
 		fmt.Println("The image will be tagged as: <app-name>:<timestamp>-<git-hash>")
 		fmt.Println("Example: myapp:20250721-2118-f7a5a27")
+		fmt.Println("")
+		fmt.Println("Examples:")
+		fmt.Println("  s3dock build myapp")
+		fmt.Println("  s3dock build myapp --path /path/to/repo")
+		fmt.Println("  s3dock build myapp --path ./subdirectory")
+		fmt.Println("  s3dock build myapp --path . --dockerfile Dockerfile.prod")
+		fmt.Println("  s3dock build myapp --path /git/repo --context /build/context")
 		return
 	}
 
@@ -352,10 +363,16 @@ func handleBuildCommand(globalFlags *GlobalFlags, args []string) {
 
 	dockerfile := "Dockerfile"
 	contextPath := "."
+	gitPath := "."
 
 	for i := 0; i < len(buildArgs); i++ {
 		arg := buildArgs[i]
 		switch arg {
+		case "--path":
+			if i+1 < len(buildArgs) {
+				gitPath = buildArgs[i+1]
+				i++
+			}
 		case "--dockerfile":
 			if i+1 < len(buildArgs) {
 				dockerfile = buildArgs[i+1]
@@ -369,13 +386,18 @@ func handleBuildCommand(globalFlags *GlobalFlags, args []string) {
 		}
 	}
 
-	if err := buildImageWithConfig(appName, contextPath, dockerfile); err != nil {
+	// If --path is specified but --context is not, use the same path for both
+	if gitPath != "." && contextPath == "." {
+		contextPath = gitPath
+	}
+
+	if err := buildImageWithConfig(appName, contextPath, dockerfile, gitPath); err != nil {
 		internal.LogError("Error building image: %v", err)
 		os.Exit(1)
 	}
 }
 
-func buildImageWithConfig(appName, contextPath, dockerfile string) error {
+func buildImageWithConfig(appName, contextPath, dockerfile, gitPath string) error {
 	ctx := context.Background()
 
 	dockerClient, err := internal.NewDockerClient()
@@ -388,7 +410,7 @@ func buildImageWithConfig(appName, contextPath, dockerfile string) error {
 
 	builder := internal.NewImageBuilder(dockerClient, gitClient)
 
-	_, err = builder.Build(ctx, appName, contextPath, dockerfile)
+	_, err = builder.Build(ctx, appName, contextPath, dockerfile, gitPath)
 	return err
 }
 
