@@ -28,19 +28,32 @@ s3dock eliminates the need for running and maintaining a centralized Docker regi
 
 ### Download Release
 
-Download the latest release for your platform from the releases page:
+Download the latest release for your platform from the [Releases page](https://github.com/mindreframer/s3dock/releases).
+
+Set the version you want to install (see the Releases page for the latest version):
 
 ```bash
-# Linux
-curl -L https://github.com/your-org/s3dock/releases/latest/download/s3dock-linux-amd64 -o s3dock
+# Set the version you want to install
+export S3DOCK_VERSION=0.1.0
+
+# Linux (x86_64)
+curl -L "https://github.com/mindreframer/s3dock/releases/download/v${S3DOCK_VERSION}/s3dock_${S3DOCK_VERSION}_linux_amd64.tar.gz" | tar xz
 chmod +x s3dock
 
-# macOS
-curl -L https://github.com/your-org/s3dock/releases/latest/download/s3dock-darwin-arm64 -o s3dock
+# Linux (arm64)
+curl -L "https://github.com/mindreframer/s3dock/releases/download/v${S3DOCK_VERSION}/s3dock_${S3DOCK_VERSION}_linux_arm64.tar.gz" | tar xz
 chmod +x s3dock
 
-# Windows
-# Download s3dock-windows-amd64.exe from releases
+# macOS (Apple Silicon)
+curl -L "https://github.com/mindreframer/s3dock/releases/download/v${S3DOCK_VERSION}/s3dock_${S3DOCK_VERSION}_darwin_arm64.tar.gz" | tar xz
+chmod +x s3dock
+
+# macOS (Intel)
+curl -L "https://github.com/mindreframer/s3dock/releases/download/v${S3DOCK_VERSION}/s3dock_${S3DOCK_VERSION}_darwin_amd64.tar.gz" | tar xz
+chmod +x s3dock
+
+# Windows (x86_64)
+# Download and extract s3dock_${S3DOCK_VERSION}_windows_amd64.zip from the releases page
 ```
 
 ### Build from Source
