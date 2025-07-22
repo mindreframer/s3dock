@@ -161,6 +161,23 @@ func (p *ImagePuller) downloadAndImportImage(ctx context.Context, appName, sourc
 
 	LogDebug("Image metadata - size: %d bytes, checksum: %s", metadata.Size, metadata.Checksum)
 
+	// Check if image already exists in Docker
+	expectedImageTag := metadata.ImageTag
+	LogDebug("Checking if image already exists in Docker: %s", expectedImageTag)
+
+	exists, err := p.docker.ImageExists(ctx, expectedImageTag)
+	if err != nil {
+		LogError("Failed to check if Docker image exists: %v", err)
+		return fmt.Errorf("failed to check if Docker image exists: %w", err)
+	}
+
+	if exists {
+		LogInfo("Image %s already exists in Docker, skipping download and import", expectedImageTag)
+		return nil
+	}
+
+	LogDebug("Image %s not found in Docker, proceeding with download", expectedImageTag)
+
 	// Create temporary file for download
 	tempFile, err := os.CreateTemp("", "s3dock-pull-*.tar.gz")
 	if err != nil {

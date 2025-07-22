@@ -38,6 +38,7 @@ func TestImagePuller_Pull_Success_DirectImage(t *testing.T) {
 	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(imageData, nil)
 
 	// Set up Docker mock
+	mockDocker.On("ImageExists", mock.Anything, "myapp:20250722-0039-abc1234").Return(false, nil)
 	mockDocker.On("ImportImage", mock.Anything, mock.AnythingOfType("*gzip.Reader")).Return(nil)
 
 	puller := NewImagePuller(mockDocker, mockS3, "test-bucket")
@@ -53,7 +54,7 @@ func TestImagePuller_Pull_Success_TagReference(t *testing.T) {
 	mockDocker := new(MockDockerClient)
 	mockS3 := new(MockS3Client)
 
-	// Create test data  
+	// Create test data
 	testContent := "mock image data tag"
 	metadataJSON, imageData, _ := createTestMetadata(testContent)
 
@@ -87,6 +88,7 @@ func TestImagePuller_Pull_Success_TagReference(t *testing.T) {
 	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(imageData, nil)
 
 	// Set up Docker mock
+	mockDocker.On("ImageExists", mock.Anything, "myapp:20250722-0039-abc1234").Return(false, nil)
 	mockDocker.On("ImportImage", mock.Anything, mock.AnythingOfType("*gzip.Reader")).Return(nil)
 
 	puller := NewImagePuller(mockDocker, mockS3, "test-bucket")
@@ -140,6 +142,7 @@ func TestImagePuller_PullFromTag_Success(t *testing.T) {
 	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(imageData, nil)
 
 	// Set up Docker mock
+	mockDocker.On("ImageExists", mock.Anything, "myapp:20250722-0039-abc1234").Return(false, nil)
 	mockDocker.On("ImportImage", mock.Anything, mock.AnythingOfType("*gzip.Reader")).Return(nil)
 
 	puller := NewImagePuller(mockDocker, mockS3, "test-bucket")
@@ -193,12 +196,13 @@ func TestImagePuller_Pull_ChecksumMismatch_RetrySuccess(t *testing.T) {
 	mockS3.On("Exists", mock.Anything, "test-bucket", "pointers/myapp/production.json").Return(true, nil)
 	mockS3.On("Download", mock.Anything, "test-bucket", "pointers/myapp/production.json").Return([]byte(envPointerJSON), nil)
 	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.json").Return([]byte(metadataJSON), nil)
-	
+
 	// First download returns bad data, second returns good data
 	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(badImageData, nil).Once()
 	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(goodImageData, nil).Once()
 
 	// Set up Docker mock
+	mockDocker.On("ImageExists", mock.Anything, "myapp:20250722-0039-abc1234").Return(false, nil)
 	mockDocker.On("ImportImage", mock.Anything, mock.AnythingOfType("*gzip.Reader")).Return(nil)
 
 	puller := NewImagePuller(mockDocker, mockS3, "test-bucket")
@@ -236,6 +240,7 @@ func TestImagePuller_Pull_DockerImportFailure(t *testing.T) {
 	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(imageData, nil)
 
 	// Set up Docker mock to fail
+	mockDocker.On("ImageExists", mock.Anything, "myapp:20250722-0039-abc1234").Return(false, nil)
 	mockDocker.On("ImportImage", mock.Anything, mock.AnythingOfType("*gzip.Reader")).Return(assert.AnError)
 
 	puller := NewImagePuller(mockDocker, mockS3, "test-bucket")
@@ -244,6 +249,44 @@ func TestImagePuller_Pull_DockerImportFailure(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to import image to Docker")
+	mockS3.AssertExpectations(t)
+	mockDocker.AssertExpectations(t)
+}
+
+func TestImagePuller_Pull_Skip_ImageAlreadyExists(t *testing.T) {
+	mockDocker := new(MockDockerClient)
+	mockS3 := new(MockS3Client)
+
+	// Create test data
+	testContent := "existing image data"
+	metadataJSON, _, _ := createTestMetadata(testContent)
+
+	// Mock environment pointer
+	envPointerJSON := `{
+		"target_type": "image",
+		"target_path": "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz",
+		"promoted_at": "2025-07-22T13:34:24Z",
+		"promoted_by": "testuser",
+		"git_hash": "abc1234",
+		"git_time": "20250722-0039",
+		"source_image": "myapp:20250722-0039-abc1234"
+	}`
+
+	// Set up S3 mocks - note that we only mock metadata download, not image download
+	mockS3.On("Exists", mock.Anything, "test-bucket", "pointers/myapp/production.json").Return(true, nil)
+	mockS3.On("Download", mock.Anything, "test-bucket", "pointers/myapp/production.json").Return([]byte(envPointerJSON), nil)
+	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.json").Return([]byte(metadataJSON), nil)
+	// No image download mock - should be skipped
+
+	// Set up Docker mock - image already exists
+	mockDocker.On("ImageExists", mock.Anything, "myapp:20250722-0039-abc1234").Return(true, nil)
+	// No ImportImage mock - should be skipped
+
+	puller := NewImagePuller(mockDocker, mockS3, "test-bucket")
+
+	err := puller.Pull(context.Background(), "myapp", "production")
+
+	assert.NoError(t, err)
 	mockS3.AssertExpectations(t)
 	mockDocker.AssertExpectations(t)
 }
@@ -267,16 +310,16 @@ func calculateExpectedChecksum(content string) string {
 func createTestMetadata(content string) (string, []byte, string) {
 	imageData := createMockGzippedData(content)
 	checksum := calculateExpectedChecksum(content)
-	
+
 	metadataJSON := fmt.Sprintf(`{
 		"checksum": "%s",
 		"size": %d,
 		"git_hash": "abc1234",
 		"git_time": "20250722-0039",
-		"image_ref": "myapp:20250722-0039-abc1234",
+		"image_tag": "myapp:20250722-0039-abc1234",
 		"app_name": "myapp",
 		"created_at": "2025-07-22T13:34:18Z"
 	}`, checksum, len(imageData))
-	
+
 	return metadataJSON, imageData, checksum
 }

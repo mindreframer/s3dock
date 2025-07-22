@@ -27,6 +27,11 @@ func (m *MockDockerClient) ImportImage(ctx context.Context, tarStream io.Reader)
 	return args.Error(0)
 }
 
+func (m *MockDockerClient) ImageExists(ctx context.Context, imageRef string) (bool, error) {
+	args := m.Called(ctx, imageRef)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *MockDockerClient) BuildImage(ctx context.Context, contextPath string, dockerfile string, tags []string) error {
 	args := m.Called(ctx, contextPath, dockerfile, tags)
 	return args.Error(0)

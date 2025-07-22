@@ -113,6 +113,17 @@ func (d *DockerClientImpl) ImportImage(ctx context.Context, tarStream io.Reader)
 	return err
 }
 
+func (d *DockerClientImpl) ImageExists(ctx context.Context, imageRef string) (bool, error) {
+	_, _, err := d.client.ImageInspectWithRaw(ctx, imageRef)
+	if err != nil {
+		if client.IsErrNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 func (d *DockerClientImpl) BuildImage(ctx context.Context, contextPath string, dockerfile string, tags []string) error {
 	dockerfilePath := dockerfile
 	if !filepath.IsAbs(dockerfile) {
