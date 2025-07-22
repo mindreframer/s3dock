@@ -2,8 +2,8 @@ name: Release
 
 on:
   push:
-    # tags:
-    #   - 'v*'
+    tags:
+      - 'v*'
 
 jobs:
   release:
@@ -28,13 +28,6 @@ jobs:
           export BUN_INSTALL="$HOME/.bun"
           export PATH="$BUN_INSTALL/bin:$PATH"
           bun install -g @goreleaser/goreleaser
-
-      - name: Clean up GoReleaser temp dirs
-        run: rm -rf archive-*
-
-
-      - name: git status
-        run: git status
 
       - name: Run GoReleaser via Makefile
         run: |
