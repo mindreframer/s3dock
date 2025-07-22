@@ -1,10 +1,10 @@
 # s3dock Makefile
 BINARY_NAME=s3dock
 BINARY_UNIX=$(BINARY_NAME)_unix
-VERSION?=latest
+VERSION?=$(shell cat VERSION 2>/dev/null || echo "dev")
 BUILD_TIME=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
-GIT_COMMIT=$(shell git rev-parse --short HEAD)
-LDFLAGS=-ldflags "-X main.Version=$(VERSION) -X main.BuildTime=$(BUILD_TIME) -X main.GitCommit=$(GIT_COMMIT)"
+GIT_COMMIT=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+LDFLAGS=-ldflags "-X main.version=$(VERSION) -X main.date=$(BUILD_TIME) -X main.commit=$(GIT_COMMIT)"
 
 .PHONY: help
 help: ## Show this help message

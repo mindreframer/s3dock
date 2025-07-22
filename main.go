@@ -9,6 +9,12 @@ import (
 	"s3dock/internal"
 )
 
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 type GlobalFlags struct {
 	Config   string
 	Profile  string
@@ -51,6 +57,8 @@ func main() {
 		handlePromoteCommand(globalFlags, commandArgs)
 	case "pull":
 		handlePullCommand(globalFlags, commandArgs)
+	case "version", "--version", "-v":
+		handleVersionCommand()
 	case "list":
 		internal.LogInfo("List functionality not yet implemented")
 	case "cleanup":
@@ -81,6 +89,7 @@ func printUsage() {
 	fmt.Println("  tag <image> <ver>   Create semantic version tag")
 	fmt.Println("  promote <src> <env> Promote image/tag to environment")
 	fmt.Println("  config              Config file management")
+	fmt.Println("  version             Show version information")
 	fmt.Println("  tag               Tag functionality (not implemented)")
 	fmt.Println("  pull              Pull functionality (not implemented)")
 	fmt.Println("  list              List functionality (not implemented)")
@@ -655,4 +664,10 @@ func pullTagWithConfig(appName, version string, globalFlags *GlobalFlags) error 
 	puller := internal.NewImagePuller(dockerClient, s3Client, config.Bucket)
 
 	return puller.PullFromTag(ctx, appName, version)
+}
+
+func handleVersionCommand() {
+	fmt.Printf("s3dock version %s\n", version)
+	fmt.Printf("commit: %s\n", commit)
+	fmt.Printf("built: %s\n", date)
 }
