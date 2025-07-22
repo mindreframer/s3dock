@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/schollz/progressbar/v3"
 )
 
 type S3ClientImpl struct {
@@ -83,6 +84,20 @@ func (s *S3ClientImpl) Copy(ctx context.Context, bucket, srcKey, dstKey string) 
 		Bucket:     aws.String(bucket),
 		Key:        aws.String(dstKey),
 		CopySource: aws.String(copySource),
+	})
+	return err
+}
+
+func (s *S3ClientImpl) UploadWithProgress(ctx context.Context, bucket, key string, data io.Reader, size int64, description string) error {
+	bar := progressbar.DefaultBytes(size, description)
+	defer bar.Finish()
+
+	reader := progressbar.NewReader(data, bar)
+
+	_, err := s.uploader.Upload(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+		Body:   &reader,
 	})
 	return err
 }

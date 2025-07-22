@@ -12,6 +12,7 @@ type DockerClient interface {
 
 type S3Client interface {
 	Upload(ctx context.Context, bucket, key string, data io.Reader) error
+	UploadWithProgress(ctx context.Context, bucket, key string, data io.Reader, size int64, description string) error
 	Exists(ctx context.Context, bucket, key string) (bool, error)
 	Download(ctx context.Context, bucket, key string) ([]byte, error)
 	Copy(ctx context.Context, bucket, srcKey, dstKey string) error

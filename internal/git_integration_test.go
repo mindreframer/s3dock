@@ -486,7 +486,7 @@ func TestIntegration_Build_MultipleCommits_TagFormat(t *testing.T) {
 		return
 	}
 
-	gitHash, err := gitClient.GetCurrentHash()
+	gitHash, err := gitClient.GetCurrentHash(".")
 	if err != nil {
 		t.Fatalf("failed to get current hash: %v", err)
 	}

@@ -8,6 +8,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/schollz/progressbar/v3"
 )
 
 type ImagePusher struct {
@@ -63,7 +65,15 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 	}
 
 	LogDebug("Exporting Docker image %s", imageRef)
+	spinner := progressbar.NewOptions(-1,
+		progressbar.OptionSetDescription("Exporting Docker image..."),
+		progressbar.OptionSpinnerType(14),
+		progressbar.OptionSetWidth(50),
+	)
+	spinner.RenderBlank()
+
 	imageData, err := p.docker.ExportImage(ctx, imageRef)
+	spinner.Finish()
 	if err != nil {
 		LogError("Failed to export image: %v", err)
 		return fmt.Errorf("failed to export image: %w", err)
@@ -138,7 +148,7 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 
 	// Upload new image
 	LogDebug("Uploading image to S3: %s", s3Key)
-	if err := p.s3.Upload(ctx, p.bucket, s3Key, &buf); err != nil {
+	if err := p.s3.UploadWithProgress(ctx, p.bucket, s3Key, &buf, metadata.Size, "Uploading image"); err != nil {
 		LogError("Failed to upload image to S3: %v", err)
 		return fmt.Errorf("failed to upload image to S3: %w", err)
 	}

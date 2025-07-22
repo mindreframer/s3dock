@@ -36,6 +36,11 @@ func (m *MockS3Client) Upload(ctx context.Context, bucket, key string, data io.R
 	return args.Error(0)
 }
 
+func (m *MockS3Client) UploadWithProgress(ctx context.Context, bucket, key string, data io.Reader, size int64, description string) error {
+	args := m.Called(ctx, bucket, key, data, size, description)
+	return args.Error(0)
+}
+
 func (m *MockS3Client) Exists(ctx context.Context, bucket, key string) (bool, error) {
 	args := m.Called(ctx, bucket, key)
 	return args.Bool(0), args.Error(1)
@@ -108,9 +113,9 @@ func TestImagePusher_Push_Success_NewImage(t *testing.T) {
 	})).Return(false, nil)
 
 	// Upload image and metadata
-	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
+	mockS3.On("UploadWithProgress", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".tar.gz") && strings.HasPrefix(key, "images/")
-	}), mock.Anything).Return(nil)
+	}), mock.Anything, mock.AnythingOfType("int64"), mock.AnythingOfType("string")).Return(nil)
 	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".json") && strings.HasPrefix(key, "images/")
 	}), mock.Anything).Return(nil)
@@ -216,9 +221,9 @@ func TestImagePusher_Push_Success_ChecksumMismatch(t *testing.T) {
 	mockS3.On("Delete", mock.Anything, "test-bucket", mock.AnythingOfType("string")).Return(nil)
 
 	// Upload new image and metadata
-	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
+	mockS3.On("UploadWithProgress", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".tar.gz") && strings.HasPrefix(key, "images/")
-	}), mock.Anything).Return(nil)
+	}), mock.Anything, mock.AnythingOfType("int64"), mock.AnythingOfType("string")).Return(nil)
 	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".json") && strings.HasPrefix(key, "images/")
 	}), mock.Anything).Return(nil)
@@ -278,9 +283,9 @@ func TestImagePusher_Push_VerifyGzipCompression(t *testing.T) {
 	var uploadedData *bytes.Buffer
 
 	// Capture uploaded data to verify it's compressed
-	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
+	mockS3.On("UploadWithProgress", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".tar.gz") && strings.HasPrefix(key, "images/")
-	}), mock.Anything).Run(func(args mock.Arguments) {
+	}), mock.Anything, mock.AnythingOfType("int64"), mock.AnythingOfType("string")).Run(func(args mock.Arguments) {
 		reader := args.Get(3).(io.Reader)
 		uploadedData = &bytes.Buffer{}
 		io.Copy(uploadedData, reader)

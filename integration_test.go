@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"s3dock/internal"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestIntegration_Push(t *testing.T) {
