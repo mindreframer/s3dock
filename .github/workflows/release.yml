@@ -29,6 +29,9 @@ jobs:
           export PATH="$BUN_INSTALL/bin:$PATH"
           bun install -g @goreleaser/goreleaser
 
+      - name: Clean up GoReleaser temp dirs
+        run: rm -rf archive-*
+
       - name: Run GoReleaser via Makefile
         run: |
           export BUN_INSTALL="$HOME/.bun"
