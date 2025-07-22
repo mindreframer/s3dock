@@ -2,6 +2,14 @@
 
 A lightweight, registry-less Docker image distribution system using S3-compatible storage.
 
+## Philosophy: No 'latest', No Manual Builds
+
+s3dock enforces a reproducible, traceable workflow for Docker images:
+- **No `latest` tags**: Every image is tagged with a unique, immutable git-based tag (e.g., `myapp:20250721-2118-f7a5a27`).
+- **No manual `docker build`**: All builds must use `s3dock build`, which ensures a clean git state and stable tagging.
+- **No mutable tags**: All tags are permanent and correspond to a specific git commit.
+- **Why?** This guarantees perfect traceability, reproducibility, and safe promotion/rollback across environments.
+
 ## Overview
 
 s3dock eliminates the need for running and maintaining a centralized Docker registry by leveraging S3 storage for Docker image distribution. Images are exported as compressed tar archives and stored with predictable naming patterns, making deployment pipelines simple and cost-effective.
@@ -87,14 +95,15 @@ Or add credentials to your config file:
 }
 ```
 
-### 3. Push an Image
+### 3. Build and Push an Image (with s3dock)
 
 ```bash
-# Build your Docker image
-docker build -t myapp:latest .
+# Build your Docker image with a git-based, stable tag (requires clean repo)
+s3dock build myapp
+# Example output tag: myapp:20250721-2118-f7a5a27
 
 # Push to S3
-s3dock push myapp:latest
+s3dock push myapp:20250721-2118-f7a5a27
 ```
 
 ## Configuration
@@ -174,13 +183,13 @@ s3dock provides configurable logging levels to help with debugging and troublesh
 
 ```bash
 # Only show errors
-s3dock --log-level 1 push myapp:latest
+s3dock --log-level 1 push myapp:20250721-2118-f7a5a27
 
 # Show normal operations (default)
-s3dock --log-level 2 push myapp:latest
+s3dock --log-level 2 push myapp:20250721-2118-f7a5a27
 
 # Show detailed debug information
-s3dock --log-level 3 push myapp:latest
+s3dock --log-level 3 push myapp:20250721-2118-f7a5a27
 ```
 
 Debug output includes:
@@ -192,13 +201,54 @@ Debug output includes:
 
 ### Available Commands
 
+#### `build`
+Build a Docker image with a git-based, stable tag (requires clean repo).
+
+```bash
+s3dock build myapp
+s3dock build myapp --dockerfile Dockerfile.prod --context ./backend
+# Output: myapp:20250721-2118-f7a5a27
+```
+
 #### `push`
 Push a Docker image to S3 storage.
 
 ```bash
-s3dock push <image:tag>
-s3dock --profile prod push myapp:v1.2.3
-s3dock --bucket custom-bucket push myapp:latest
+s3dock push myapp:20250721-2118-f7a5a27
+s3dock --profile prod push myapp:20250721-2118-f7a5a27
+s3dock --bucket custom-bucket push myapp:20250721-2118-f7a5a27
+```
+
+#### `tag`
+Create semantic version tags pointing to specific images.
+
+```bash
+s3dock tag myapp:20250721-2118-f7a5a27 v1.2.0
+s3dock tag myapp:20250720-1045-def5678 v1.1.5
+```
+
+#### `promote`
+Promote images to environments (direct or via semantic version tags).
+
+```bash
+s3dock promote myapp:20250721-2118-f7a5a27 production
+s3dock promote myapp:20250720-1045-def5678 staging
+s3dock promote myapp v1.2.0 production
+s3dock promote myapp v1.1.5 staging
+```
+
+#### `pull`
+Pull image from environment pointer.
+
+```bash
+s3dock pull myapp production
+```
+
+#### `deploy`
+Deploy with blue-green strategy.
+
+```bash
+s3dock deploy --blue-green myapp production
 ```
 
 #### `config`
@@ -227,14 +277,14 @@ s3://your-bucket/
   images/
     myapp/
       202507/
-        myapp-20250721-1504-abc1234.tar.gz
+        myapp-20250721-2118-f7a5a27.tar.gz
   pointers/
     myapp/
       production.json
       staging.json
   tags/
     myapp/
-      v1.2.3.json
+      v1.2.0.json
 ```
 
 **Naming Convention**: `{app}-{timestamp}-{git-hash}.tar.gz`
@@ -244,22 +294,35 @@ s3://your-bucket/
 ### Development Workflow
 
 ```bash
-# Use development environment
-s3dock --profile dev push myapp:latest
+# Build with git-based stable tag (requires clean repo)
+s3dock build myapp
+# Example output: myapp:20250721-2118-f7a5a27
 
-# Use explicit config file for testing
-s3dock --config test-configs/local.json5 push myapp:test
+# Push built image to S3
+s3dock push myapp:20250721-2118-f7a5a27
+
+# Create semantic version tags
+s3dock tag myapp:20250721-2118-f7a5a27 v1.2.0
+
+# Promote images to environments
+s3dock promote myapp:20250721-2118-f7a5a27 production
+
+# Promote via semantic versions
+s3dock promote myapp v1.2.0 production
+
+# Pull image from environment
+s3dock pull myapp production
 ```
 
 ### CI/CD Pipeline
 
 ```bash
-# Build and push in CI
-docker build -t myapp:${GIT_SHA} .
-s3dock --profile staging push myapp:${GIT_SHA}
+# Build and push in CI (requires clean repo)
+s3dock build myapp
+s3dock --profile staging push myapp:20250721-2118-f7a5a27
 
 # Production deployment
-s3dock --profile prod push myapp:${GIT_SHA}
+s3dock --profile prod push myapp:20250721-2118-f7a5a27
 ```
 
 ### Local Development with MinIO
