@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -69,10 +70,25 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 	}
 	defer imageData.Close()
 
-	// Calculate metadata while buffering data
-	LogDebug("Calculating metadata for image")
+	// Add gzip compression
+	LogDebug("Compressing image data with gzip")
+	pr, pw := io.Pipe()
+	go func() {
+		defer pw.Close()
+		gzipWriter := gzip.NewWriter(pw)
+		defer gzipWriter.Close()
+
+		if _, err := io.Copy(gzipWriter, imageData); err != nil {
+			LogError("Failed to compress image data: %v", err)
+			pw.CloseWithError(err)
+			return
+		}
+	}()
+
+	// Calculate metadata while buffering compressed data
+	LogDebug("Calculating metadata for compressed image")
 	var buf bytes.Buffer
-	teeReader := io.TeeReader(imageData, &buf)
+	teeReader := io.TeeReader(pr, &buf)
 
 	metadata, _, err := CalculateMetadata(teeReader, gitHash, gitTime, imageRef, appName)
 	if err != nil {

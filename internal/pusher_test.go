@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
 	"io"
@@ -142,10 +144,10 @@ func TestImagePusher_Push_Success_ExistingSameChecksum(t *testing.T) {
 		return strings.HasSuffix(key, ".json") && strings.HasPrefix(key, "images/")
 	})).Return(true, nil)
 
-	// Return existing metadata with same checksum
+	// Return existing metadata with same checksum (now gzipped)
 	existingMetadata := &ImageMetadata{
-		Checksum: "e09a574ca3760a3e28a3e5920fe4627e", // MD5 of "image data"
-		Size:     10,
+		Checksum: "e3cb4936e6592acbef54276b4eb77d56", // MD5 of gzipped "image data"
+		Size:     34,                                 // Size of compressed data
 	}
 	metadataJSON, _ := existingMetadata.ToJSON()
 	mockS3.On("Download", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
@@ -252,6 +254,64 @@ func TestImagePusher_Push_DockerError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to export image")
+	mockGit.AssertExpectations(t)
+	mockDocker.AssertExpectations(t)
+	mockS3.AssertExpectations(t)
+}
+
+func TestImagePusher_Push_VerifyGzipCompression(t *testing.T) {
+	mockDocker := new(MockDockerClient)
+	mockS3 := new(MockS3Client)
+	mockGit := new(MockGitClient)
+
+	originalData := "test image data that should be compressed"
+
+	mockGit.On("GetCurrentHash", mock.Anything).Return("abc1234", nil)
+	mockGit.On("GetCommitTimestamp", mock.Anything).Return("20250721-1430", nil)
+	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(io.NopCloser(strings.NewReader(originalData)), nil)
+
+	// Metadata doesn't exist (new image)
+	mockS3.On("Exists", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
+		return strings.HasSuffix(key, ".json") && strings.HasPrefix(key, "images/")
+	})).Return(false, nil)
+
+	var uploadedData *bytes.Buffer
+
+	// Capture uploaded data to verify it's compressed
+	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
+		return strings.HasSuffix(key, ".tar.gz") && strings.HasPrefix(key, "images/")
+	}), mock.Anything).Run(func(args mock.Arguments) {
+		reader := args.Get(3).(io.Reader)
+		uploadedData = &bytes.Buffer{}
+		io.Copy(uploadedData, reader)
+	}).Return(nil)
+
+	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
+		return strings.HasSuffix(key, ".json") && strings.HasPrefix(key, "images/")
+	}), mock.Anything).Return(nil)
+
+	// Mock audit log upload
+	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
+		return strings.HasPrefix(key, "audit/") && strings.Contains(key, "push")
+	}), mock.Anything).Return(nil)
+
+	pusher := NewImagePusher(mockDocker, mockS3, mockGit, "test-bucket")
+
+	err := pusher.Push(context.Background(), "myapp:latest")
+
+	assert.NoError(t, err)
+	assert.NotNil(t, uploadedData, "Should have captured uploaded data")
+
+	// Verify the uploaded data is gzip compressed
+	reader, err := gzip.NewReader(uploadedData)
+	assert.NoError(t, err, "Uploaded data should be valid gzip")
+
+	decompressed, err := io.ReadAll(reader)
+	assert.NoError(t, err, "Should be able to decompress uploaded data")
+	assert.Equal(t, originalData, string(decompressed), "Decompressed data should match original")
+
+	reader.Close()
+
 	mockGit.AssertExpectations(t)
 	mockDocker.AssertExpectations(t)
 	mockS3.AssertExpectations(t)
