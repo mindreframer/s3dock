@@ -2,8 +2,8 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    # tags:
+    #   - 'v*'
 
 jobs:
   release:
@@ -32,10 +32,14 @@ jobs:
       - name: Clean up GoReleaser temp dirs
         run: rm -rf archive-*
 
-      - name: Run GoReleaser via Makefile
-        run: |
-          export BUN_INSTALL="$HOME/.bun"
-          export PATH="$BUN_INSTALL/bin:$PATH"
-          make goreleaser-release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: git status
+        run: git status
+
+      # - name: Run GoReleaser via Makefile
+      #   run: |
+      #     export BUN_INSTALL="$HOME/.bun"
+      #     export PATH="$BUN_INSTALL/bin:$PATH"
+      #     make goreleaser-release
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
