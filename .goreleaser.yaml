@@ -1,5 +1,10 @@
 version: 2
 project_name: s3dock
+
+before:
+  hooks:
+    - go mod tidy
+
 release:
   github:
     owner: "mindreframer"
@@ -16,7 +21,7 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
     env:
       - CGO_ENABLED=0
     binary: s3dock
