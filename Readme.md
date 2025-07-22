@@ -59,7 +59,7 @@ chmod +x s3dock
 ### Build from Source
 
 ```bash
-git clone https://github.com/your-org/s3dock.git
+git clone https://github.com/mindreframer/s3dock.git
 cd s3dock
 make build
 ```
