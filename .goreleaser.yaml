@@ -1,3 +1,4 @@
+version: 2
 project_name: s3dock
 release:
   github:
@@ -22,9 +23,9 @@ builds:
     
 archives:
   - id: default
-    builds:
+    ids:
       - s3dock
-    format: tar.gz
+    formats: ['tar.gz']
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE
