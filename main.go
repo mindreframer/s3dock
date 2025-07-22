@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"s3dock/internal"
 )
@@ -49,7 +50,7 @@ func main() {
 	case "promote":
 		handlePromoteCommand(globalFlags, commandArgs)
 	case "pull":
-		internal.LogInfo("Pull functionality not yet implemented")
+		handlePullCommand(globalFlags, commandArgs)
 	case "list":
 		internal.LogInfo("List functionality not yet implemented")
 	case "cleanup":
@@ -558,4 +559,100 @@ func promoteTagWithConfig(appName, version, environment string, config *internal
 	promoter := internal.NewImagePromoter(s3Client, config.Bucket)
 
 	return promoter.PromoteFromTag(ctx, appName, version, environment)
+}
+
+func handlePullCommand(globalFlags *GlobalFlags, args []string) {
+	if len(args) < 2 {
+		internal.LogError("Pull command requires app name and environment/tag")
+		fmt.Fprintf(os.Stderr, "Usage:\n")
+		fmt.Fprintf(os.Stderr, "  %s pull <app> <environment>    # Pull from environment (e.g., production, staging)\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s pull <app> <tag>           # Pull from tag (e.g., v1.2.0)\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	appName := args[0]
+	target := args[1]
+
+	// Determine if target is a version tag (starts with 'v') or environment
+	if strings.HasPrefix(target, "v") && len(strings.Split(target, ".")) >= 2 {
+		// It's a version tag like v1.2.0
+		err := pullTagWithConfig(appName, target, globalFlags)
+		if err != nil {
+			internal.LogError("Failed to pull tag: %v", err)
+			os.Exit(1)
+		}
+	} else {
+		// It's an environment like production, staging
+		err := pullImageWithConfig(appName, target, globalFlags)
+		if err != nil {
+			internal.LogError("Failed to pull image: %v", err)
+			os.Exit(1)
+		}
+	}
+}
+
+func pullImageWithConfig(appName, environment string, globalFlags *GlobalFlags) error {
+	config, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+
+	// Set environment variables for AWS configuration
+	os.Setenv("AWS_REGION", config.Region)
+	if config.Endpoint != "" {
+		os.Setenv("AWS_ENDPOINT_URL", config.Endpoint)
+	}
+	if config.AccessKey != "" && config.SecretKey != "" {
+		os.Setenv("AWS_ACCESS_KEY_ID", config.AccessKey)
+		os.Setenv("AWS_SECRET_ACCESS_KEY", config.SecretKey)
+	}
+
+	s3Client, err := internal.NewS3Client(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create S3 client: %w", err)
+	}
+
+	dockerClient, err := internal.NewDockerClient()
+	if err != nil {
+		return fmt.Errorf("failed to create Docker client: %w", err)
+	}
+
+	puller := internal.NewImagePuller(dockerClient, s3Client, config.Bucket)
+
+	return puller.Pull(ctx, appName, environment)
+}
+
+func pullTagWithConfig(appName, version string, globalFlags *GlobalFlags) error {
+	config, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+
+	// Set environment variables for AWS configuration
+	os.Setenv("AWS_REGION", config.Region)
+	if config.Endpoint != "" {
+		os.Setenv("AWS_ENDPOINT_URL", config.Endpoint)
+	}
+	if config.AccessKey != "" && config.SecretKey != "" {
+		os.Setenv("AWS_ACCESS_KEY_ID", config.AccessKey)
+		os.Setenv("AWS_SECRET_ACCESS_KEY", config.SecretKey)
+	}
+
+	s3Client, err := internal.NewS3Client(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create S3 client: %w", err)
+	}
+
+	dockerClient, err := internal.NewDockerClient()
+	if err != nil {
+		return fmt.Errorf("failed to create Docker client: %w", err)
+	}
+
+	puller := internal.NewImagePuller(dockerClient, s3Client, config.Bucket)
+
+	return puller.PullFromTag(ctx, appName, version)
 }

@@ -7,6 +7,7 @@ import (
 
 type DockerClient interface {
 	ExportImage(ctx context.Context, imageRef string) (io.ReadCloser, error)
+	ImportImage(ctx context.Context, tarStream io.Reader) error
 	BuildImage(ctx context.Context, contextPath string, dockerfile string, tags []string) error
 }
 

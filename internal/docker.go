@@ -101,6 +101,18 @@ func (d *DockerClientImpl) ExportImage(ctx context.Context, imageRef string) (io
 	return d.client.ImageSave(ctx, []string{imageRef})
 }
 
+func (d *DockerClientImpl) ImportImage(ctx context.Context, tarStream io.Reader) error {
+	resp, err := d.client.ImageLoad(ctx, tarStream, client.ImageLoadWithQuiet(false))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Read response to ensure import completed
+	_, err = io.ReadAll(resp.Body)
+	return err
+}
+
 func (d *DockerClientImpl) BuildImage(ctx context.Context, contextPath string, dockerfile string, tags []string) error {
 	dockerfilePath := dockerfile
 	if !filepath.IsAbs(dockerfile) {

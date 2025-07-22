@@ -22,6 +22,11 @@ func (m *MockDockerClient) ExportImage(ctx context.Context, imageRef string) (io
 	return args.Get(0).(io.ReadCloser), args.Error(1)
 }
 
+func (m *MockDockerClient) ImportImage(ctx context.Context, tarStream io.Reader) error {
+	args := m.Called(ctx, tarStream)
+	return args.Error(0)
+}
+
 func (m *MockDockerClient) BuildImage(ctx context.Context, contextPath string, dockerfile string, tags []string) error {
 	args := m.Called(ctx, contextPath, dockerfile, tags)
 	return args.Error(0)
