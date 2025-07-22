@@ -107,12 +107,13 @@ func (p *ImagePromoter) Promote(ctx context.Context, source, environment string)
 	appName := ""
 	var pointer *PointerMetadata
 	var err error
+	var gitTime, gitHash string
 
 	// Determine if source is an image reference or a version tag
 	if strings.Contains(source, ":") {
 		// It's an image reference like myapp:20250721-2118-f7a5a27
 		LogDebug("Source appears to be an image reference")
-		appName, gitTime, gitHash, err := ParseImageReference(source)
+		appName, gitTime, gitHash, err = ParseImageReference(source)
 		if err != nil {
 			LogError("Failed to parse image reference: %v", err)
 			return fmt.Errorf("failed to parse image reference: %w", err)
@@ -190,8 +191,14 @@ func (p *ImagePromoter) Promote(ctx context.Context, source, environment string)
 
 	// Log audit event for promotion
 	auditEvent, err := CreatePromotionEvent(appName, pointer.GitHash, pointer.GitTime, environment, source, "image", envKey, previousTarget)
-	if err == nil {
-		p.audit.LogEvent(ctx, auditEvent)
+	if err != nil {
+		LogError("Failed to create promotion audit event: %v", err)
+		return fmt.Errorf("failed to create promotion audit event: %w", err)
+	}
+
+	if err := p.audit.LogEvent(ctx, auditEvent); err != nil {
+		LogError("Failed to log promotion audit event: %v", err)
+		return fmt.Errorf("failed to log promotion audit event: %w", err)
 	}
 
 	return nil
@@ -274,8 +281,14 @@ func (p *ImagePromoter) PromoteFromTag(ctx context.Context, appName, version, en
 	// Log audit event for tag-based promotion
 	sourceRef := fmt.Sprintf("%s:%s", appName, version)
 	auditEvent, err := CreatePromotionEvent(appName, tagPointer.GitHash, tagPointer.GitTime, environment, sourceRef, "tag", envKey, previousTarget)
-	if err == nil {
-		p.audit.LogEvent(ctx, auditEvent)
+	if err != nil {
+		LogError("Failed to create tag promotion audit event: %v", err)
+		return fmt.Errorf("failed to create tag promotion audit event: %w", err)
+	}
+
+	if err := p.audit.LogEvent(ctx, auditEvent); err != nil {
+		LogError("Failed to log tag promotion audit event: %v", err)
+		return fmt.Errorf("failed to log tag promotion audit event: %w", err)
 	}
 
 	return nil
