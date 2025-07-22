@@ -11,7 +11,8 @@
       "Bash(S3DOCK_BUCKET=s3dock-test ./s3dock push:*)",
       "Bash(make:*)",
       "WebFetch(domain:pkg.go.dev)",
-      "Bash(./dist/s3dock-darwin-arm64:*)"
+      "Bash(./dist/s3dock-darwin-arm64:*)",
+      "Bash(./dist/s3dock_darwin_arm64_v8.0/s3dock:*)"
     ],
     "deny": []
   }
