@@ -155,7 +155,7 @@ func (p *ImagePromoter) Promote(ctx context.Context, source, environment string)
 		return fmt.Errorf("promoting from version tags requires specifying app name - use 'appname:version' format or direct image reference")
 	}
 
-	// Check for existing pointer to track previous state
+	// Check for existing pointer to track previous state and detect duplicates
 	envKey := GeneratePointerKey(appName, environment)
 	LogDebug("Environment pointer key: %s", envKey)
 
@@ -170,6 +170,14 @@ func (p *ImagePromoter) Promote(ctx context.Context, source, environment string)
 			if err == nil {
 				previousTarget = existingPointer.TargetPath
 				LogDebug("Previous target: %s", previousTarget)
+
+				// Check if we're promoting to the same target
+				newTargetPath := pointer.TargetPath
+				if existingPointer.TargetPath == newTargetPath {
+					LogInfo("Environment %s is already pointing to %s, skipping promotion", environment, newTargetPath)
+					return nil
+				}
+				LogDebug("Target changed from %s to %s, proceeding with promotion", existingPointer.TargetPath, newTargetPath)
 			}
 		}
 	}
@@ -244,7 +252,7 @@ func (p *ImagePromoter) PromoteFromTag(ctx context.Context, appName, version, en
 		return fmt.Errorf("failed to create environment pointer: %w", err)
 	}
 
-	// Check for existing pointer to track previous state
+	// Check for existing pointer to track previous state and detect duplicates
 	envKey := GeneratePointerKey(appName, environment)
 	LogDebug("Environment pointer key: %s", envKey)
 
@@ -259,6 +267,14 @@ func (p *ImagePromoter) PromoteFromTag(ctx context.Context, appName, version, en
 			if err == nil {
 				previousTarget = existingPointer.TargetPath
 				LogDebug("Previous target: %s", previousTarget)
+
+				// Check if we're promoting to the same target
+				newTargetPath := envPointer.TargetPath
+				if existingPointer.TargetPath == newTargetPath {
+					LogInfo("Environment %s is already pointing to %s, skipping tag promotion", environment, newTargetPath)
+					return nil
+				}
+				LogDebug("Target changed from %s to %s, proceeding with tag promotion", existingPointer.TargetPath, newTargetPath)
 			}
 		}
 	}
