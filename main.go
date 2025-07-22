@@ -58,7 +58,7 @@ func main() {
 	case "pull":
 		handlePullCommand(globalFlags, commandArgs)
 	case "version", "--version", "-v":
-		handleVersionCommand()
+		handleVersionCommand(commandArgs)
 	case "list":
 		internal.LogInfo("List functionality not yet implemented")
 	case "cleanup":
@@ -666,8 +666,22 @@ func pullTagWithConfig(appName, version string, globalFlags *GlobalFlags) error 
 	return puller.PullFromTag(ctx, appName, version)
 }
 
-func handleVersionCommand() {
-	fmt.Printf("s3dock version %s\n", version)
-	fmt.Printf("commit: %s\n", commit)
-	fmt.Printf("built: %s\n", date)
+func handleVersionCommand(args []string) {
+	showFull := false
+	
+	// Check for --full or --detailed flag
+	for _, arg := range args {
+		if arg == "--full" || arg == "--detailed" {
+			showFull = true
+			break
+		}
+	}
+	
+	if showFull {
+		fmt.Printf("s3dock version %s\n", version)
+		fmt.Printf("commit: %s\n", commit)
+		fmt.Printf("built: %s\n", date)
+	} else {
+		fmt.Println(version)
+	}
 }
