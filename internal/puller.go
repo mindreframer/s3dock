@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/schollz/progressbar/v3"
 )
@@ -251,23 +250,19 @@ func (p *ImagePuller) downloadAndImportImage(ctx context.Context, appName, sourc
 
 // downloadImageWithProgress downloads image from S3 with progress bar
 func (p *ImagePuller) downloadImageWithProgress(ctx context.Context, imageS3Path string, dest io.WriteSeeker, expectedSize int64) error {
-	// Note: We need to add a DownloadWithProgress method to S3Client interface
-	// For now, use regular download - this will be enhanced
 	LogDebug("Downloading image from S3: %s", imageS3Path)
 
 	// Create progress bar
 	bar := progressbar.DefaultBytes(expectedSize, "Downloading image")
 	defer bar.Finish()
 
-	// This is a placeholder - we'll need to enhance S3Client to support streaming downloads
-	// For now, let's implement basic functionality
-	data, err := p.s3.Download(ctx, p.bucket, imageS3Path)
+	// Stream from S3
+	reader, err := p.s3.DownloadStream(ctx, p.bucket, imageS3Path)
 	if err != nil {
 		return err
 	}
+	defer reader.Close()
 
-	// Write with progress tracking
-	reader := strings.NewReader(string(data))
 	progressReader := progressbar.NewReader(reader, bar)
 
 	_, err = io.Copy(dest, &progressReader)

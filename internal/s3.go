@@ -109,3 +109,15 @@ func (s *S3ClientImpl) Delete(ctx context.Context, bucket, key string) error {
 	})
 	return err
 }
+
+// DownloadStream streams an object from S3 as an io.ReadCloser.
+func (s *S3ClientImpl) DownloadStream(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
+	resp, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Body, nil
+}

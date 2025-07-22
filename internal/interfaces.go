@@ -17,6 +17,7 @@ type S3Client interface {
 	UploadWithProgress(ctx context.Context, bucket, key string, data io.Reader, size int64, description string) error
 	Exists(ctx context.Context, bucket, key string) (bool, error)
 	Download(ctx context.Context, bucket, key string) ([]byte, error)
+	DownloadStream(ctx context.Context, bucket, key string) (io.ReadCloser, error)
 	Copy(ctx context.Context, bucket, srcKey, dstKey string) error
 	Delete(ctx context.Context, bucket, key string) error
 }

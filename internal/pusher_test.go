@@ -71,6 +71,11 @@ func (m *MockS3Client) Delete(ctx context.Context, bucket, key string) error {
 	return args.Error(0)
 }
 
+func (m *MockS3Client) DownloadStream(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
+	args := m.Called(ctx, bucket, key)
+	return args.Get(0).(io.ReadCloser), args.Error(1)
+}
+
 type MockGitClient struct {
 	mock.Mock
 }

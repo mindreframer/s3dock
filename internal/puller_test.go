@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,7 +36,7 @@ func TestImagePuller_Pull_Success_DirectImage(t *testing.T) {
 	mockS3.On("Exists", mock.Anything, "test-bucket", "pointers/myapp/production.json").Return(true, nil)
 	mockS3.On("Download", mock.Anything, "test-bucket", "pointers/myapp/production.json").Return([]byte(envPointerJSON), nil)
 	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.json").Return([]byte(metadataJSON), nil)
-	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(imageData, nil)
+	mockS3.On("DownloadStream", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(io.NopCloser(bytes.NewReader(imageData)), nil)
 
 	// Set up Docker mock
 	mockDocker.On("ImageExists", mock.Anything, "myapp:20250722-0039-abc1234").Return(false, nil)
@@ -85,7 +86,7 @@ func TestImagePuller_Pull_Success_TagReference(t *testing.T) {
 	mockS3.On("Download", mock.Anything, "test-bucket", "pointers/myapp/staging.json").Return([]byte(envPointerJSON), nil)
 	mockS3.On("Download", mock.Anything, "test-bucket", "tags/myapp/v1.2.0.json").Return([]byte(tagPointerJSON), nil)
 	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.json").Return([]byte(metadataJSON), nil)
-	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(imageData, nil)
+	mockS3.On("DownloadStream", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(io.NopCloser(bytes.NewReader(imageData)), nil)
 
 	// Set up Docker mock
 	mockDocker.On("ImageExists", mock.Anything, "myapp:20250722-0039-abc1234").Return(false, nil)
@@ -139,7 +140,7 @@ func TestImagePuller_PullFromTag_Success(t *testing.T) {
 	mockS3.On("Exists", mock.Anything, "test-bucket", "tags/myapp/v1.2.0.json").Return(true, nil)
 	mockS3.On("Download", mock.Anything, "test-bucket", "tags/myapp/v1.2.0.json").Return([]byte(tagPointerJSON), nil)
 	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.json").Return([]byte(metadataJSON), nil)
-	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(imageData, nil)
+	mockS3.On("DownloadStream", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(io.NopCloser(bytes.NewReader(imageData)), nil)
 
 	// Set up Docker mock
 	mockDocker.On("ImageExists", mock.Anything, "myapp:20250722-0039-abc1234").Return(false, nil)
@@ -197,9 +198,9 @@ func TestImagePuller_Pull_ChecksumMismatch_RetrySuccess(t *testing.T) {
 	mockS3.On("Download", mock.Anything, "test-bucket", "pointers/myapp/production.json").Return([]byte(envPointerJSON), nil)
 	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.json").Return([]byte(metadataJSON), nil)
 
-	// First download returns bad data, second returns good data
-	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(badImageData, nil).Once()
-	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(goodImageData, nil).Once()
+	// Remove Download mocks for tarball in retry test, only mock DownloadStream for each retry
+	mockS3.On("DownloadStream", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(io.NopCloser(bytes.NewReader(badImageData)), nil).Once()
+	mockS3.On("DownloadStream", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(io.NopCloser(bytes.NewReader(goodImageData)), nil).Once()
 
 	// Set up Docker mock
 	mockDocker.On("ImageExists", mock.Anything, "myapp:20250722-0039-abc1234").Return(false, nil)
@@ -237,7 +238,7 @@ func TestImagePuller_Pull_DockerImportFailure(t *testing.T) {
 	mockS3.On("Exists", mock.Anything, "test-bucket", "pointers/myapp/production.json").Return(true, nil)
 	mockS3.On("Download", mock.Anything, "test-bucket", "pointers/myapp/production.json").Return([]byte(envPointerJSON), nil)
 	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.json").Return([]byte(metadataJSON), nil)
-	mockS3.On("Download", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(imageData, nil)
+	mockS3.On("DownloadStream", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250722-0039-abc1234.tar.gz").Return(io.NopCloser(bytes.NewReader(imageData)), nil)
 
 	// Set up Docker mock to fail
 	mockDocker.On("ImageExists", mock.Anything, "myapp:20250722-0039-abc1234").Return(false, nil)
