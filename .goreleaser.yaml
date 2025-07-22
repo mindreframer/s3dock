@@ -1,0 +1,41 @@
+project_name: s3dock
+release:
+  github:
+    owner: "mindreframer"
+    name: "s3dock"
+
+builds:
+  - id: s3dock
+    main: ./main.go
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+    env:
+      - CGO_ENABLED=0
+    binary: s3dock
+    
+archives:
+  - id: default
+    builds:
+      - s3dock
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - Readme.md
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:' 
