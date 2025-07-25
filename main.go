@@ -353,6 +353,7 @@ func handleBuildCommand(globalFlags *GlobalFlags, args []string) {
 		fmt.Println("  --path <directory>   Git repository path (default: .)")
 		fmt.Println("  --dockerfile <path>  Dockerfile to use (default: Dockerfile)")
 		fmt.Println("  --context <path>     Build context path (default: .)")
+		fmt.Println("  --platform <platform> Target platform (e.g., linux/amd64, linux/arm64)")
 		fmt.Println("")
 		fmt.Println("Note: If --path is specified but --context is not, both will use the same path.")
 		fmt.Println("")
@@ -365,6 +366,8 @@ func handleBuildCommand(globalFlags *GlobalFlags, args []string) {
 		fmt.Println("  s3dock build myapp --path ./subdirectory")
 		fmt.Println("  s3dock build myapp --path . --dockerfile Dockerfile.prod")
 		fmt.Println("  s3dock build myapp --path /git/repo --context /build/context")
+		fmt.Println("  s3dock build myapp --platform linux/amd64")
+		fmt.Println("  s3dock build myapp --platform linux/arm64")
 		return
 	}
 
@@ -374,6 +377,7 @@ func handleBuildCommand(globalFlags *GlobalFlags, args []string) {
 	dockerfile := "Dockerfile"
 	contextPath := "."
 	gitPath := "."
+	platform := ""
 
 	for i := 0; i < len(buildArgs); i++ {
 		arg := buildArgs[i]
@@ -393,6 +397,11 @@ func handleBuildCommand(globalFlags *GlobalFlags, args []string) {
 				contextPath = buildArgs[i+1]
 				i++
 			}
+		case "--platform":
+			if i+1 < len(buildArgs) {
+				platform = buildArgs[i+1]
+				i++
+			}
 		}
 	}
 
@@ -401,13 +410,13 @@ func handleBuildCommand(globalFlags *GlobalFlags, args []string) {
 		contextPath = gitPath
 	}
 
-	if err := buildImageWithConfig(appName, contextPath, dockerfile, gitPath); err != nil {
+	if err := buildImageWithConfig(appName, contextPath, dockerfile, gitPath, platform); err != nil {
 		internal.LogError("Error building image: %v", err)
 		os.Exit(1)
 	}
 }
 
-func buildImageWithConfig(appName, contextPath, dockerfile, gitPath string) error {
+func buildImageWithConfig(appName, contextPath, dockerfile, gitPath, platform string) error {
 	ctx := context.Background()
 
 	dockerClient, err := internal.NewDockerClient()
@@ -420,7 +429,7 @@ func buildImageWithConfig(appName, contextPath, dockerfile, gitPath string) erro
 
 	builder := internal.NewImageBuilder(dockerClient, gitClient)
 
-	_, err = builder.Build(ctx, appName, contextPath, dockerfile, gitPath)
+	_, err = builder.Build(ctx, appName, contextPath, dockerfile, gitPath, platform)
 	return err
 }
 

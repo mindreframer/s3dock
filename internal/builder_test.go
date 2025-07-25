@@ -15,11 +15,11 @@ func TestImageBuilder_Build_Success(t *testing.T) {
 	mockGit.On("IsRepositoryDirty", ".").Return(false, nil)
 	mockGit.On("GetCurrentHash", ".").Return("abc1234", nil)
 	mockGit.On("GetCommitTimestamp", ".").Return("20250721-1430", nil)
-	mockDocker.On("BuildImage", context.Background(), ".", "Dockerfile", []string{"myapp:20250721-1430-abc1234"}).Return(nil)
+	mockDocker.On("BuildImage", context.Background(), ".", "Dockerfile", []string{"myapp:20250721-1430-abc1234"}, "").Return(nil)
 
 	builder := NewImageBuilder(mockDocker, mockGit)
 
-	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".")
+	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "")
 
 	assert.NoError(t, err)
 	assert.Equal(t, "myapp:20250721-1430-abc1234", tag)
@@ -35,7 +35,7 @@ func TestImageBuilder_Build_DirtyRepository(t *testing.T) {
 
 	builder := NewImageBuilder(mockDocker, mockGit)
 
-	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".")
+	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "")
 
 	assert.Error(t, err)
 	assert.Empty(t, tag)
@@ -52,7 +52,7 @@ func TestImageBuilder_Build_GitHashError(t *testing.T) {
 
 	builder := NewImageBuilder(mockDocker, mockGit)
 
-	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".")
+	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "")
 
 	assert.Error(t, err)
 	assert.Empty(t, tag)
@@ -70,7 +70,7 @@ func TestImageBuilder_Build_GitTimestampError(t *testing.T) {
 
 	builder := NewImageBuilder(mockDocker, mockGit)
 
-	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".")
+	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "")
 
 	assert.Error(t, err)
 	assert.Empty(t, tag)
@@ -85,15 +85,34 @@ func TestImageBuilder_Build_DockerBuildError(t *testing.T) {
 	mockGit.On("IsRepositoryDirty", ".").Return(false, nil)
 	mockGit.On("GetCurrentHash", ".").Return("abc1234", nil)
 	mockGit.On("GetCommitTimestamp", ".").Return("20250721-1430", nil)
-	mockDocker.On("BuildImage", context.Background(), ".", "Dockerfile", []string{"myapp:20250721-1430-abc1234"}).Return(errors.New("docker build error"))
+	mockDocker.On("BuildImage", context.Background(), ".", "Dockerfile", []string{"myapp:20250721-1430-abc1234"}, "").Return(errors.New("docker build error"))
 
 	builder := NewImageBuilder(mockDocker, mockGit)
 
-	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".")
+	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "")
 
 	assert.Error(t, err)
 	assert.Empty(t, tag)
 	assert.Contains(t, err.Error(), "failed to build image")
+	mockGit.AssertExpectations(t)
+	mockDocker.AssertExpectations(t)
+}
+
+func TestImageBuilder_Build_WithPlatform(t *testing.T) {
+	mockDocker := new(MockDockerClient)
+	mockGit := new(MockGitClient)
+
+	mockGit.On("IsRepositoryDirty", ".").Return(false, nil)
+	mockGit.On("GetCurrentHash", ".").Return("abc1234", nil)
+	mockGit.On("GetCommitTimestamp", ".").Return("20250721-1430", nil)
+	mockDocker.On("BuildImage", context.Background(), ".", "Dockerfile", []string{"myapp:20250721-1430-abc1234"}, "linux/amd64").Return(nil)
+
+	builder := NewImageBuilder(mockDocker, mockGit)
+
+	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "linux/amd64")
+
+	assert.NoError(t, err)
+	assert.Equal(t, "myapp:20250721-1430-abc1234", tag)
 	mockGit.AssertExpectations(t)
 	mockDocker.AssertExpectations(t)
 }

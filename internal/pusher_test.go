@@ -32,8 +32,8 @@ func (m *MockDockerClient) ImageExists(ctx context.Context, imageRef string) (bo
 	return args.Bool(0), args.Error(1)
 }
 
-func (m *MockDockerClient) BuildImage(ctx context.Context, contextPath string, dockerfile string, tags []string) error {
-	args := m.Called(ctx, contextPath, dockerfile, tags)
+func (m *MockDockerClient) BuildImage(ctx context.Context, contextPath string, dockerfile string, tags []string, platform string) error {
+	args := m.Called(ctx, contextPath, dockerfile, tags, platform)
 	return args.Error(0)
 }
 

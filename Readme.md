@@ -220,6 +220,8 @@ Build a Docker image with a git-based, stable tag (requires clean repo).
 ```bash
 s3dock build myapp
 s3dock build myapp --dockerfile Dockerfile.prod --context ./backend
+s3dock build myapp --platform linux/amd64
+s3dock build myapp --platform linux/arm64
 # Output: myapp:20250721-2118-f7a5a27
 ```
 
@@ -309,6 +311,7 @@ s3://your-bucket/
 ```bash
 # Build with git-based stable tag (requires clean repo)
 s3dock build myapp
+s3dock build myapp --platform linux/amd64  # For cross-platform builds
 # Example output: myapp:20250721-2118-f7a5a27
 
 # Push built image to S3

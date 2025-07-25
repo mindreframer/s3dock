@@ -17,9 +17,9 @@ func NewImageBuilder(docker DockerClient, git GitClient) *ImageBuilder {
 	}
 }
 
-func (b *ImageBuilder) Build(ctx context.Context, appName string, contextPath string, dockerfile string, gitPath string) (string, error) {
+func (b *ImageBuilder) Build(ctx context.Context, appName string, contextPath string, dockerfile string, gitPath string, platform string) (string, error) {
 	LogInfo("Starting build for app: %s", appName)
-	LogDebug("Build context: %s, Git path: %s, Dockerfile: %s", contextPath, gitPath, dockerfile)
+	LogDebug("Build context: %s, Git path: %s, Dockerfile: %s, Platform: %s", contextPath, gitPath, dockerfile, platform)
 
 	LogDebug("Checking if repository is clean")
 	isDirty, err := b.git.IsRepositoryDirty(gitPath)
@@ -55,7 +55,7 @@ func (b *ImageBuilder) Build(ctx context.Context, appName string, contextPath st
 	LogInfo("Building image %s with tag %s", appName, tag)
 
 	// Use contextPath for Docker build, gitPath for git operations
-	if err := b.docker.BuildImage(ctx, contextPath, dockerfile, []string{tag}); err != nil {
+	if err := b.docker.BuildImage(ctx, contextPath, dockerfile, []string{tag}, platform); err != nil {
 		LogError("Failed to build image %s: %v", tag, err)
 		return "", fmt.Errorf("failed to build image: %w", err)
 	}

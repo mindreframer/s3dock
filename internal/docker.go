@@ -124,7 +124,7 @@ func (d *DockerClientImpl) ImageExists(ctx context.Context, imageRef string) (bo
 	return true, nil
 }
 
-func (d *DockerClientImpl) BuildImage(ctx context.Context, contextPath string, dockerfile string, tags []string) error {
+func (d *DockerClientImpl) BuildImage(ctx context.Context, contextPath string, dockerfile string, tags []string, platform string) error {
 	dockerfilePath := dockerfile
 	if !filepath.IsAbs(dockerfile) {
 		dockerfilePath = filepath.Join(contextPath, dockerfile)
@@ -140,10 +140,16 @@ func (d *DockerClientImpl) BuildImage(ctx context.Context, contextPath string, d
 	}
 	defer tarReader.Close()
 
-	response, err := d.client.ImageBuild(ctx, tarReader, types.ImageBuildOptions{
+	buildOptions := types.ImageBuildOptions{
 		Tags:       tags,
 		Dockerfile: dockerfile,
-	})
+	}
+
+	if platform != "" {
+		buildOptions.Platform = platform
+	}
+
+	response, err := d.client.ImageBuild(ctx, tarReader, buildOptions)
 	if err != nil {
 		return err
 	}

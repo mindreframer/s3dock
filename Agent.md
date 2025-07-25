@@ -55,6 +55,8 @@ s3dock stores Docker images as tar.gz files in S3 buckets with pointer files for
 # Build with git-based stable tag (requires clean repo)
 s3dock build myapp
 s3dock build myapp --dockerfile Dockerfile.prod --context ./backend
+s3dock build myapp --platform linux/amd64  # Cross-platform builds
+s3dock build myapp --platform linux/arm64
 
 # Push built image to S3
 s3dock push myapp:20250721-2118-f7a5a27
