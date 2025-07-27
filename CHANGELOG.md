@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.1.4] - 2025-07-27
+
+- implement the current command: `s3dock current myapp production`
+
 ## [v0.1.0] - 2025-07-22
 
 ### Features
