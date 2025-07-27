@@ -259,6 +259,17 @@ Pull image from environment pointer.
 s3dock pull myapp production
 ```
 
+#### `current`
+Show the currently desired image for an environment.
+
+```bash
+s3dock current myapp production
+# Output: myapp:20250721-2118-f7a5a27
+
+s3dock current myapp staging
+# Output: myapp:20250720-1045-def5678
+```
+
 #### `deploy`
 Deploy with blue-green strategy.
 
@@ -325,6 +336,10 @@ s3dock promote myapp:20250721-2118-f7a5a27 production
 
 # Promote via semantic versions
 s3dock promote myapp v1.2.0 production
+
+# Check current image in environment
+s3dock current myapp production
+# Output: myapp:20250721-2118-f7a5a27
 
 # Pull image from environment
 s3dock pull myapp production

@@ -38,12 +38,18 @@ s3dock stores Docker images as tar.gz files in S3 buckets with pointer files for
 - Download and import tar.gz into Docker
 - Cleanup old images
 
-### 6. Registry CLI (`s3dock`)
-- Unified interface: build, push, tag, promote, pull, list, cleanup
+### 6. Current Image Checker (`s3dock current`)
+- Show currently desired image for an environment
+- Resolves environment pointers to actual image references
+- Supports both direct image and tag-based pointers
+- Clean output format: `app:timestamp-hash`
+
+### 7. Registry CLI (`s3dock`)
+- Unified interface: build, push, tag, promote, pull, current, list, cleanup
 - Configuration management
 - Profile-based configurations
 
-### 7. Blue-Green Deployment (`s3dock deploy`)
+### 8. Blue-Green Deployment (`s3dock deploy`)
 - Environment state tracking
 - Health checking before traffic switch
 - Traffic switching via load balancer updates
@@ -75,6 +81,10 @@ s3dock promote myapp v1.1.5 staging
 
 # Pull image from environment
 s3dock pull myapp production
+
+# Show current image for environment
+s3dock current myapp production
+# Output: myapp:20250721-2118-f7a5a27
 
 # Deploy with blue-green strategy
 s3dock deploy --blue-green myapp production

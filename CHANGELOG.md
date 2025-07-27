@@ -10,7 +10,8 @@ All notable changes to this project will be documented in this file.
 - Semantic version tagging with audit trail
 - Promote images to environments (direct or via semantic tags) with atomic pointer updates
 - Pull images from S3 and import into Docker, with cleanup of old images
-- Unified CLI for build, push, tag, promote, pull, list, and cleanup
+- Show current image for environments with `current` command
+- Unified CLI for build, push, tag, promote, pull, current, list, and cleanup
 - Profile-based configuration management
 - Blue-green deployment support with health checks and automated rollback
 - Complete audit trail for push, tag, and promotion events
