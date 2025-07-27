@@ -57,6 +57,8 @@ func main() {
 		handlePromoteCommand(globalFlags, commandArgs)
 	case "pull":
 		handlePullCommand(globalFlags, commandArgs)
+	case "current":
+		handleCurrentCommand(globalFlags, commandArgs)
 	case "version", "--version", "-v":
 		handleVersionCommand(commandArgs)
 	case "list":
@@ -88,10 +90,10 @@ func printUsage() {
 	fmt.Println("  push <image:tag>    Push Docker image to S3")
 	fmt.Println("  tag <image> <ver>   Create semantic version tag")
 	fmt.Println("  promote <src> <env> Promote image/tag to environment")
+	fmt.Println("  pull <app> <env>    Pull image from environment")
+	fmt.Println("  current <app> <env> Show current image for environment")
 	fmt.Println("  config              Config file management")
 	fmt.Println("  version             Show version information")
-	fmt.Println("  tag               Tag functionality (not implemented)")
-	fmt.Println("  pull              Pull functionality (not implemented)")
 	fmt.Println("  list              List functionality (not implemented)")
 	fmt.Println("  cleanup           Cleanup functionality (not implemented)")
 	fmt.Println("  deploy            Deploy functionality (not implemented)")
@@ -675,9 +677,62 @@ func pullTagWithConfig(appName, version string, globalFlags *GlobalFlags) error 
 	return puller.PullFromTag(ctx, appName, version)
 }
 
+func handleCurrentCommand(globalFlags *GlobalFlags, args []string) {
+	if len(args) < 2 {
+		internal.LogError("Current command requires app name and environment")
+		fmt.Fprintf(os.Stderr, "Usage:\n")
+		fmt.Fprintf(os.Stderr, "  %s current <app> <environment>    # Show current image for environment (e.g., production, staging)\n", os.Args[0])
+		os.Exit(1)
+	}
+
+	appName := args[0]
+	environment := args[1]
+
+	err := getCurrentImageWithConfig(appName, environment, globalFlags)
+	if err != nil {
+		internal.LogError("Failed to get current image: %v", err)
+		os.Exit(1)
+	}
+}
+
+func getCurrentImageWithConfig(appName, environment string, globalFlags *GlobalFlags) error {
+	config, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+
+	// Set environment variables for AWS configuration
+	os.Setenv("AWS_REGION", config.Region)
+	if config.Endpoint != "" {
+		os.Setenv("AWS_ENDPOINT_URL", config.Endpoint)
+	}
+	if config.AccessKey != "" && config.SecretKey != "" {
+		os.Setenv("AWS_ACCESS_KEY_ID", config.AccessKey)
+		os.Setenv("AWS_SECRET_ACCESS_KEY", config.SecretKey)
+	}
+
+	s3Client, err := internal.NewS3Client(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create S3 client: %w", err)
+	}
+
+	currentService := internal.NewCurrentService(s3Client, config.Bucket)
+
+	imageRef, err := currentService.GetCurrentImage(ctx, appName, environment)
+	if err != nil {
+		return err
+	}
+
+	// Output the current image reference
+	fmt.Println(imageRef)
+	return nil
+}
+
 func handleVersionCommand(args []string) {
 	showFull := false
-	
+
 	// Check for --full or --detailed flag
 	for _, arg := range args {
 		if arg == "--full" || arg == "--detailed" {
@@ -685,7 +740,7 @@ func handleVersionCommand(args []string) {
 			break
 		}
 	}
-	
+
 	if showFull {
 		fmt.Printf("s3dock version %s\n", version)
 		fmt.Printf("commit: %s\n", commit)

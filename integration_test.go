@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -54,4 +55,51 @@ func TestIntegration_Push(t *testing.T) {
 
 	err = pusher.Push(ctx, imageRef)
 	assert.NoError(t, err, "Integration test should pass with proper MinIO setup")
+}
+
+func TestCurrentCommand_Integration(t *testing.T) {
+	// Test that the current command shows proper usage when called without arguments
+	cmd := exec.Command("./s3dock", "current")
+	output, err := cmd.CombinedOutput()
+
+	// Should exit with error code 1
+	if err == nil {
+		t.Error("Expected command to fail with error, but it succeeded")
+	}
+
+	// Should show usage message
+	outputStr := string(output)
+	if !contains(outputStr, "Current command requires app name and environment") {
+		t.Errorf("Expected usage message, got: %s", outputStr)
+	}
+}
+
+func TestCurrentCommand_Usage(t *testing.T) {
+	// Test that the current command shows proper usage when called with insufficient arguments
+	cmd := exec.Command("./s3dock", "current", "myapp")
+	output, err := cmd.CombinedOutput()
+
+	// Should exit with error code 1
+	if err == nil {
+		t.Error("Expected command to fail with error, but it succeeded")
+	}
+
+	// Should show usage message
+	outputStr := string(output)
+	if !contains(outputStr, "Current command requires app name and environment") {
+		t.Errorf("Expected usage message, got: %s", outputStr)
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			func() bool {
+				for i := 0; i <= len(s)-len(substr); i++ {
+					if s[i:i+len(substr)] == substr {
+						return true
+					}
+				}
+				return false
+			}()))
 }
