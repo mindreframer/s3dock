@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.1.5]
+
+### Fixed
+- **Git Repository Auto-Detection**: Added `FindRepositoryRoot()` method to automatically detect git repository root when using `--context` parameter. Now correctly handles builds where the build context is a subdirectory of the git repository
+- **Dockerfile Path Handling**: Fixed absolute dockerfile paths to be converted to relative paths for Docker API. Docker build API requires dockerfile paths to be relative to the build context
+- **Symlink Handling**: Added symlink detection and skipping to prevent tar format issues. Symlinks in build context (like `.cursorrules -> AGENT.md`) were causing "archive/tar: write too long" errors
+- **Tar Path Length Protection**: Added protection for file paths over 90 characters to prevent tar format limit violations
+- **Enhanced .dockerignore Processing**: Improved pattern matching logic and added debug logging to ensure directories like `artifacts/` and `.elixir_ls/` are properly excluded from build context
+
+### Enhanced
+- Added comprehensive debug logging for build context creation, path processing, and pattern matching
+- Improved error messages and diagnostic output for troubleshooting build issues
+
 ## [v0.1.4] - 2025-07-27
 
 - implement the current command: `s3dock current myapp production`
