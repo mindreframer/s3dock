@@ -11,7 +11,13 @@ func NewGitClient() *GitClientImpl {
 }
 
 func (g *GitClientImpl) GetCurrentHash(path string) (string, error) {
-	repo, err := git.PlainOpen(path)
+	// Find the repository root first
+	repoRoot, err := g.FindRepositoryRoot(path)
+	if err != nil {
+		return "", err
+	}
+	
+	repo, err := git.PlainOpen(repoRoot)
 	if err != nil {
 		return "", err
 	}
@@ -25,7 +31,13 @@ func (g *GitClientImpl) GetCurrentHash(path string) (string, error) {
 }
 
 func (g *GitClientImpl) GetCommitTimestamp(path string) (string, error) {
-	repo, err := git.PlainOpen(path)
+	// Find the repository root first
+	repoRoot, err := g.FindRepositoryRoot(path)
+	if err != nil {
+		return "", err
+	}
+	
+	repo, err := git.PlainOpen(repoRoot)
 	if err != nil {
 		return "", err
 	}
@@ -60,7 +72,13 @@ func (g *GitClientImpl) FindRepositoryRoot(startPath string) (string, error) {
 }
 
 func (g *GitClientImpl) IsRepositoryDirty(path string) (bool, error) {
-	repo, err := git.PlainOpen(path)
+	// Find the repository root first
+	repoRoot, err := g.FindRepositoryRoot(path)
+	if err != nil {
+		return false, err
+	}
+	
+	repo, err := git.PlainOpen(repoRoot)
 	if err != nil {
 		return false, err
 	}

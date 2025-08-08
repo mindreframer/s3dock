@@ -412,19 +412,26 @@ func handleBuildCommand(globalFlags *GlobalFlags, args []string) {
 		contextPath = gitPath
 	}
 
-	// Auto-detect git repository root if not explicitly specified
-	if gitPath == "." && contextPath != "." {
-		// Create a temporary git client to find the repository root
-		gitClient := internal.NewGitClient()
+	// Always try to find the git repository root
+	gitClient := internal.NewGitClient()
+	
+	// First try to find repository from the gitPath
+	if repoRoot, err := gitClient.FindRepositoryRoot(gitPath); err == nil {
+		internal.LogDebug("Found git repository root from gitPath: %s", repoRoot)
+		gitPath = repoRoot
+	} else {
+		// If that fails, try from the context path
 		if repoRoot, err := gitClient.FindRepositoryRoot(contextPath); err == nil {
+			internal.LogDebug("Found git repository root from contextPath: %s", repoRoot)
 			gitPath = repoRoot
-			internal.LogDebug("Auto-detected git repository root: %s", gitPath)
 		} else {
-			internal.LogDebug("Could not auto-detect git repository from context path %s: %v", contextPath, err)
-			// Try the current directory as fallback
+			// Finally, try from current working directory
 			if repoRoot, err := gitClient.FindRepositoryRoot("."); err == nil {
+				internal.LogDebug("Found git repository root from current directory: %s", repoRoot)
 				gitPath = repoRoot
-				internal.LogDebug("Using git repository root from current directory: %s", gitPath)
+			} else {
+				internal.LogError("Could not find git repository: %v", err)
+				os.Exit(1)
 			}
 		}
 	}

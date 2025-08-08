@@ -19,7 +19,9 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(find:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(mkdir:*)",
+      "Bash(../s3dock:*)"
     ],
     "deny": []
   }
