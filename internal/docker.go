@@ -215,9 +215,17 @@ func (d *DockerClientImpl) createBuildContext(contextPath string) (io.ReadCloser
 			}
 
 			// Skip paths that are too long for tar format (tar has ~100 char limit for standard format)
-			if len(relPath) > 100 {
+			if len(relPath) > 90 {
 				LogDebug("Skipping path too long for tar format (%d chars): %s", len(relPath), relPath)
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
 				return nil
+			}
+
+			// Also log if we're getting close to the limit
+			if len(relPath) > 90 {
+				LogDebug("Warning: path approaching tar limit (%d chars): %s", len(relPath), relPath)
 			}
 
 			// Skip files that are too large (over 100MB)
