@@ -205,6 +205,11 @@ func (d *DockerClientImpl) createBuildContext(contextPath string) (io.ReadCloser
 				return nil
 			}
 
+			// Debug first few paths
+			if relPath == ".elixir_ls" || strings.HasPrefix(relPath, ".elixir_ls/") {
+				LogDebug("Processing .elixir_ls path: %s", relPath)
+			}
+
 			// Check if this path should be ignored
 			if shouldIgnore(relPath, patterns) {
 				LogDebug("Ignoring path: %s", relPath)
