@@ -26,4 +26,5 @@ type GitClient interface {
 	GetCurrentHash(path string) (string, error)
 	GetCommitTimestamp(path string) (string, error)
 	IsRepositoryDirty(path string) (bool, error)
+	FindRepositoryRoot(startPath string) (string, error)
 }

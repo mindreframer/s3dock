@@ -43,6 +43,22 @@ func (g *GitClientImpl) GetCommitTimestamp(path string) (string, error) {
 	return commit.Committer.When.Format("20060102-1504"), nil
 }
 
+func (g *GitClientImpl) FindRepositoryRoot(startPath string) (string, error) {
+	repo, err := git.PlainOpenWithOptions(startPath, &git.PlainOpenOptions{
+		DetectDotGit: true,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	workTree, err := repo.Worktree()
+	if err != nil {
+		return "", err
+	}
+
+	return workTree.Filesystem.Root(), nil
+}
+
 func (g *GitClientImpl) IsRepositoryDirty(path string) (bool, error) {
 	repo, err := git.PlainOpen(path)
 	if err != nil {

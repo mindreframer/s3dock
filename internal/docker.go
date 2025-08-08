@@ -58,39 +58,41 @@ func shouldIgnore(path string, patterns []string) bool {
 	normalizedPath := strings.ReplaceAll(path, string(os.PathSeparator), "/")
 
 	for _, pattern := range patterns {
+		// Normalize pattern
+		normalizedPattern := strings.ReplaceAll(pattern, string(os.PathSeparator), "/")
+		
 		// Handle directory patterns (ending with /)
-		if strings.HasSuffix(pattern, "/") {
-			dirPattern := strings.TrimSuffix(pattern, "/")
+		if strings.HasSuffix(normalizedPattern, "/") {
+			dirPattern := strings.TrimSuffix(normalizedPattern, "/")
 			// Check if the path starts with the directory pattern
 			if strings.HasPrefix(normalizedPath, dirPattern+"/") || normalizedPath == dirPattern {
 				return true
 			}
-			// Also check if any path component matches the directory pattern
-			pathParts := strings.Split(normalizedPath, "/")
-			for _, part := range pathParts {
-				if part == dirPattern {
-					return true
-				}
-			}
 		}
 
 		// Handle wildcard patterns (*)
-		if strings.Contains(pattern, "*") {
+		if strings.Contains(normalizedPattern, "*") {
 			// Check if the filename matches the pattern
 			filename := filepath.Base(normalizedPath)
-			matched, _ := filepath.Match(pattern, filename)
+			matched, _ := filepath.Match(normalizedPattern, filename)
+			if matched {
+				return true
+			}
+			// Also check the full path for wildcard patterns like "**/*.ext"
+			matched, _ = filepath.Match(normalizedPattern, normalizedPath)
 			if matched {
 				return true
 			}
 		}
 
 		// Handle exact matches
-		if normalizedPath == pattern {
+		if normalizedPath == normalizedPattern {
 			return true
 		}
 
-		// Handle prefix matches (for directory contents)
-		if strings.HasPrefix(normalizedPath, pattern+"/") {
+		// Handle prefix matches for directories (even without trailing slash)
+		// This is key for patterns like "artifacts" to match "artifacts/build/..."
+		if strings.HasPrefix(normalizedPath, normalizedPattern+"/") {
 			return true
 		}
 	}
@@ -165,6 +167,8 @@ func (d *DockerClientImpl) createBuildContext(contextPath string) (io.ReadCloser
 	if err != nil {
 		return nil, fmt.Errorf("failed to read .dockerignore: %w", err)
 	}
+
+	LogDebug("Loaded %d .dockerignore patterns: %v", len(patterns), patterns)
 
 	pr, pw := io.Pipe()
 

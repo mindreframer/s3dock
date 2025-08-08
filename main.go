@@ -412,6 +412,23 @@ func handleBuildCommand(globalFlags *GlobalFlags, args []string) {
 		contextPath = gitPath
 	}
 
+	// Auto-detect git repository root if not explicitly specified
+	if gitPath == "." && contextPath != "." {
+		// Create a temporary git client to find the repository root
+		gitClient := internal.NewGitClient()
+		if repoRoot, err := gitClient.FindRepositoryRoot(contextPath); err == nil {
+			gitPath = repoRoot
+			internal.LogDebug("Auto-detected git repository root: %s", gitPath)
+		} else {
+			internal.LogDebug("Could not auto-detect git repository from context path %s: %v", contextPath, err)
+			// Try the current directory as fallback
+			if repoRoot, err := gitClient.FindRepositoryRoot("."); err == nil {
+				gitPath = repoRoot
+				internal.LogDebug("Using git repository root from current directory: %s", gitPath)
+			}
+		}
+	}
+
 	if err := buildImageWithConfig(appName, contextPath, dockerfile, gitPath, platform); err != nil {
 		internal.LogError("Error building image: %v", err)
 		os.Exit(1)

@@ -12,7 +12,12 @@
       "Bash(make:*)",
       "WebFetch(domain:pkg.go.dev)",
       "Bash(./dist/s3dock-darwin-arm64:*)",
-      "Bash(./dist/s3dock_darwin_arm64_v8.0/s3dock:*)"
+      "Bash(./dist/s3dock_darwin_arm64_v8.0/s3dock:*)",
+      "Bash(s3dock:*)",
+      "Bash(ls:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }
