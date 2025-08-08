@@ -191,7 +191,13 @@ func (d *DockerClientImpl) createBuildContext(contextPath string) (io.ReadCloser
 		tw := tar.NewWriter(pw)
 		defer tw.Close()
 
+		walkCount := 0
 		err := filepath.Walk(contextPath, func(path string, info os.FileInfo, err error) error {
+			walkCount++
+			if walkCount <= 10 { // Log first 10 paths
+				LogDebug("Walk #%d: %s", walkCount, path)
+			}
+
 			if err != nil {
 				return err
 			}
@@ -205,7 +211,7 @@ func (d *DockerClientImpl) createBuildContext(contextPath string) (io.ReadCloser
 				return nil
 			}
 
-			// Debug first few paths
+			// Debug specific paths
 			if relPath == ".elixir_ls" || strings.HasPrefix(relPath, ".elixir_ls/") {
 				LogDebug("Processing .elixir_ls path: %s", relPath)
 			}
