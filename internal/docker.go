@@ -127,6 +127,7 @@ func (d *DockerClientImpl) ImageExists(ctx context.Context, imageRef string) (bo
 }
 
 func (d *DockerClientImpl) BuildImage(ctx context.Context, contextPath string, dockerfile string, tags []string, platform string) error {
+	// Convert dockerfile to absolute path for existence check
 	dockerfilePath := dockerfile
 	if !filepath.IsAbs(dockerfile) {
 		dockerfilePath = filepath.Join(contextPath, dockerfile)
@@ -136,6 +137,18 @@ func (d *DockerClientImpl) BuildImage(ctx context.Context, contextPath string, d
 		return fmt.Errorf("dockerfile not found: %s", dockerfilePath)
 	}
 
+	// Convert dockerfile to relative path for Docker API
+	dockerfileRelative := dockerfile
+	if filepath.IsAbs(dockerfile) {
+		rel, err := filepath.Rel(contextPath, dockerfile)
+		if err != nil {
+			return fmt.Errorf("dockerfile must be within build context: %w", err)
+		}
+		dockerfileRelative = rel
+	}
+
+	LogDebug("Using dockerfile path relative to context: %s", dockerfileRelative)
+
 	tarReader, err := d.createBuildContext(contextPath)
 	if err != nil {
 		return err
@@ -144,7 +157,7 @@ func (d *DockerClientImpl) BuildImage(ctx context.Context, contextPath string, d
 
 	buildOptions := types.ImageBuildOptions{
 		Tags:       tags,
-		Dockerfile: dockerfile,
+		Dockerfile: dockerfileRelative,
 	}
 
 	if platform != "" {
