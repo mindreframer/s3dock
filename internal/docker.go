@@ -247,6 +247,12 @@ func (d *DockerClientImpl) createBuildContext(contextPath string) (io.ReadCloser
 				return nil
 			}
 
+			// Skip symlinks as they can cause tar issues
+			if info.Mode()&os.ModeSymlink != 0 {
+				LogDebug("Skipping symlink: %s", relPath)
+				return nil
+			}
+
 			header, err := tar.FileInfoHeader(info, "")
 			if err != nil {
 				LogDebug("Error creating tar header for %s: %v", relPath, err)
