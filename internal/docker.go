@@ -194,9 +194,16 @@ func (d *DockerClientImpl) createBuildContext(contextPath string) (io.ReadCloser
 
 			// Check if this path should be ignored
 			if shouldIgnore(relPath, patterns) {
+				LogDebug("Ignoring path: %s", relPath)
 				if info.IsDir() {
 					return filepath.SkipDir
 				}
+				return nil
+			}
+
+			// Skip paths that are too long for tar format (tar has ~100 char limit for standard format)
+			if len(relPath) > 100 {
+				LogDebug("Skipping path too long for tar format (%d chars): %s", len(relPath), relPath)
 				return nil
 			}
 
