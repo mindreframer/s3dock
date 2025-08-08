@@ -194,7 +194,7 @@ func (d *DockerClientImpl) createBuildContext(contextPath string) (io.ReadCloser
 		walkCount := 0
 		err := filepath.Walk(contextPath, func(path string, info os.FileInfo, err error) error {
 			walkCount++
-			if walkCount <= 10 { // Log first 10 paths
+			if walkCount <= 100 { // Log first 100 paths to catch more
 				LogDebug("Walk #%d: %s", walkCount, path)
 			}
 
@@ -249,11 +249,13 @@ func (d *DockerClientImpl) createBuildContext(contextPath string) (io.ReadCloser
 
 			header, err := tar.FileInfoHeader(info, "")
 			if err != nil {
+				LogDebug("Error creating tar header for %s: %v", relPath, err)
 				return err
 			}
 			header.Name = relPath
 
 			if err := tw.WriteHeader(header); err != nil {
+				LogDebug("Error writing tar header for %s: %v", relPath, err)
 				return err
 			}
 
