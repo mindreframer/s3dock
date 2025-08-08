@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **Git Operations from Subdirectories**: Fixed issue where running s3dock from a subdirectory would fail with "repository does not exist" error. All git operations (`IsRepositoryDirty`, `GetCurrentHash`, `GetCommitTimestamp`) now automatically find and use the repository root, allowing s3dock to work from any directory within a git repository
+
 ## [v0.1.5]
 
 ### Fixed
