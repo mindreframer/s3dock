@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.1.9]
+
+### Added
+- **Cross-Platform Image Builds**: Added `--platform` flag to `s3dock build` command for building images targeting different architectures (e.g., `linux/amd64`, `linux/arm64`)
+
 ## [v0.1.8]
 
 ### Added
