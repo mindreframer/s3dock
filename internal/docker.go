@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -137,7 +138,7 @@ func (d *DockerClientImpl) BuildImage(ctx context.Context, contextPath string, d
 		return fmt.Errorf("dockerfile not found: %s", dockerfilePath)
 	}
 
-	// Convert dockerfile to relative path for Docker API
+	// Convert dockerfile to relative path for Docker build
 	dockerfileRelative := dockerfile
 	if filepath.IsAbs(dockerfile) {
 		rel, err := filepath.Rel(contextPath, dockerfile)
@@ -149,6 +150,36 @@ func (d *DockerClientImpl) BuildImage(ctx context.Context, contextPath string, d
 
 	LogDebug("Using dockerfile path relative to context: %s", dockerfileRelative)
 
+	// Use docker buildx for cross-platform builds (when platform is specified)
+	// The Docker SDK's ImageBuild doesn't properly handle cross-platform multi-stage builds
+	if platform != "" {
+		return d.buildWithBuildx(ctx, contextPath, dockerfileRelative, tags, platform)
+	}
+
+	// Use Docker SDK for native platform builds
+	return d.buildWithSDK(ctx, contextPath, dockerfileRelative, tags)
+}
+
+// buildWithBuildx uses docker buildx CLI for cross-platform builds
+func (d *DockerClientImpl) buildWithBuildx(ctx context.Context, contextPath string, dockerfile string, tags []string, platform string) error {
+	args := []string{"buildx", "build", "--load", "--platform", platform, "-f", dockerfile}
+	for _, tag := range tags {
+		args = append(args, "-t", tag)
+	}
+	args = append(args, ".")
+
+	LogDebug("Running: docker %s", strings.Join(args, " "))
+
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Dir = contextPath
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}
+
+// buildWithSDK uses Docker SDK for native platform builds
+func (d *DockerClientImpl) buildWithSDK(ctx context.Context, contextPath string, dockerfile string, tags []string) error {
 	tarReader, err := d.createBuildContext(contextPath)
 	if err != nil {
 		return err
@@ -157,11 +188,7 @@ func (d *DockerClientImpl) BuildImage(ctx context.Context, contextPath string, d
 
 	buildOptions := types.ImageBuildOptions{
 		Tags:       tags,
-		Dockerfile: dockerfileRelative,
-	}
-
-	if platform != "" {
-		buildOptions.Platform = platform
+		Dockerfile: dockerfile,
 	}
 
 	response, err := d.client.ImageBuild(ctx, tarReader, buildOptions)
