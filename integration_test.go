@@ -22,7 +22,8 @@ func TestIntegration_Push(t *testing.T) {
 	}
 
 	bucket := "s3dock-test"
-	imageRef := "s3dock-test:latest"
+	// Use a test tag - we'll create it by tagging an existing image
+	imageRef := "s3dock-test:20250101-0000-abc1234"
 
 	os.Setenv("AWS_ACCESS_KEY_ID", "testuser")
 	os.Setenv("AWS_SECRET_ACCESS_KEY", "testpass123")
@@ -43,6 +44,21 @@ func TestIntegration_Push(t *testing.T) {
 		t.Skipf("Docker not available: %v", err)
 	}
 	defer dockerClient.Close()
+
+	// Pull busybox if not available and tag it for our test
+	pullCmd := exec.Command("docker", "pull", "busybox:latest")
+	if output, err := pullCmd.CombinedOutput(); err != nil {
+		t.Skipf("Failed to pull busybox: %v\n%s", err, output)
+	}
+
+	tagCmd := exec.Command("docker", "tag", "busybox:latest", imageRef)
+	if output, err := tagCmd.CombinedOutput(); err != nil {
+		t.Fatalf("Failed to tag image: %v\n%s", err, output)
+	}
+	defer func() {
+		// Cleanup the test image
+		exec.Command("docker", "rmi", imageRef).Run()
+	}()
 
 	s3Client, err := internal.NewS3Client(ctx)
 	if err != nil {

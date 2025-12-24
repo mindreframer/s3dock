@@ -271,6 +271,10 @@ func (g *GitClientWithDir) IsRepositoryDirty(path string) (bool, error) {
 	return !status.IsClean(), nil
 }
 
+func (g *GitClientWithDir) FindRepositoryRoot(startPath string) (string, error) {
+	return g.dir, nil
+}
+
 // TestIntegration_GitClient tests the GitClient interface directly
 func TestIntegration_GitClient_DirectOperations(t *testing.T) {
 	flag.Parse()
@@ -336,16 +340,16 @@ func TestIntegration_Build_CleanRepo_Succeeds(t *testing.T) {
 
 	ctx := context.Background()
 	appName := "myapp"
-	tag, err := builder.Build(ctx, appName, repoDir, "Dockerfile", repoDir)
+	result, err := builder.Build(ctx, appName, repoDir, "Dockerfile", repoDir, "")
 	if err != nil {
 		t.Fatalf("build failed: %v", err)
 	}
-	logf(t, 1, "Built image tag: %s", tag)
+	logf(t, 1, "Built image tag: %s", result.ImageTag)
 
 	// Check tag format: myapp:YYYYMMDD-HHMM-abcdefg
 	expectedPattern := `^myapp:\d{8}-\d{4}-[a-f0-9]{7}$`
-	if matched, _ := regexp.MatchString(expectedPattern, tag); !matched {
-		t.Errorf("unexpected tag format: %s (expected pattern: %s)", tag, expectedPattern)
+	if matched, _ := regexp.MatchString(expectedPattern, result.ImageTag); !matched {
+		t.Errorf("unexpected tag format: %s (expected pattern: %s)", result.ImageTag, expectedPattern)
 	}
 }
 
@@ -375,7 +379,7 @@ func TestIntegration_Build_DirtyRepo_Fails(t *testing.T) {
 
 	ctx := context.Background()
 	appName := "myapp"
-	_, err = builder.Build(ctx, appName, repoDir, "Dockerfile", repoDir)
+	_, err = builder.Build(ctx, appName, repoDir, "Dockerfile", repoDir, "")
 	if err == nil {
 		t.Fatalf("expected build to fail with dirty repository, but it succeeded")
 	}
@@ -411,17 +415,17 @@ func TestIntegration_Build_ModifiedDockerfile_DetectsDirty(t *testing.T) {
 	appName := "myapp"
 
 	// First build should succeed
-	tag1, err := builder.Build(ctx, appName, repoDir, "Dockerfile", repoDir)
+	result1, err := builder.Build(ctx, appName, repoDir, "Dockerfile", repoDir, "")
 	if err != nil {
 		t.Fatalf("first build failed: %v", err)
 	}
-	logf(t, 2, "First build succeeded: %s", tag1)
+	logf(t, 2, "First build succeeded: %s", result1.ImageTag)
 
 	// Modify Dockerfile
 	modifyExistingFile(t, repoDir)
 
 	// Second build should fail due to dirty state
-	_, err = builder.Build(ctx, appName, repoDir, "Dockerfile", repoDir)
+	_, err = builder.Build(ctx, appName, repoDir, "Dockerfile", repoDir, "")
 	if err == nil {
 		t.Fatalf("expected build to fail with modified Dockerfile, but it succeeded")
 	}
@@ -460,22 +464,22 @@ func TestIntegration_Build_MultipleCommits_TagFormat(t *testing.T) {
 
 	ctx := context.Background()
 	appName := "testapp"
-	tag, err := builder.Build(ctx, appName, repoDir, "Dockerfile", repoDir)
+	result, err := builder.Build(ctx, appName, repoDir, "Dockerfile", repoDir, "")
 	if err != nil {
 		t.Fatalf("build failed: %v", err)
 	}
-	logf(t, 1, "Built image tag with multiple commits: %s", tag)
+	logf(t, 1, "Built image tag with multiple commits: %s", result.ImageTag)
 
 	// Check tag format
 	expectedPattern := `^testapp:\d{8}-\d{4}-[a-f0-9]{7}$`
-	if matched, _ := regexp.MatchString(expectedPattern, tag); !matched {
-		t.Errorf("unexpected tag format: %s (expected pattern: %s)", tag, expectedPattern)
+	if matched, _ := regexp.MatchString(expectedPattern, result.ImageTag); !matched {
+		t.Errorf("unexpected tag format: %s (expected pattern: %s)", result.ImageTag, expectedPattern)
 	}
 
 	// Verify tag reflects latest commit
-	parts := strings.Split(tag, ":")
+	parts := strings.Split(result.ImageTag, ":")
 	if len(parts) != 2 {
-		t.Errorf("invalid tag format: %s", tag)
+		t.Errorf("invalid tag format: %s", result.ImageTag)
 		return
 	}
 
