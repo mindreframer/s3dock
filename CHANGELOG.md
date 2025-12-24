@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.1.8]
+
+### Added
+- **JSON Output Support**: Added `--json` flag for machine-readable output across commands, enabling easier integration with scripts and automation tools
+
+### Fixed
+- **Integration Tests**: Fixed integration test suite
+
+## [v0.1.7]
+
+### Added
+- **List Command**: Added `s3dock list` command to query apps, images, tags, and environments
+  - `s3dock list apps` - List all applications in the registry
+  - `s3dock list images <app>` - List all images for an app (with optional `--month` filter)
+  - `s3dock list tags <app>` - List all semantic version tags for an app
+  - `s3dock list envs <app>` - List all environment pointers for an app
+  - `s3dock list tag-for <app> <env>` - Query which semantic tag was used for an environment promotion
+
 ## [v0.1.6]
 
 ### Fixed
