@@ -152,7 +152,7 @@ func TestImagePusher_Push_Success_NewImage(t *testing.T) {
 
 	pusher := NewImagePusher(mockDocker, mockS3, mockGit, "test-bucket")
 
-	err := pusher.Push(context.Background(), "myapp:latest")
+	_, err := pusher.Push(context.Background(), "myapp:latest")
 
 	assert.NoError(t, err)
 	mockGit.AssertExpectations(t)
@@ -191,7 +191,7 @@ func TestImagePusher_Push_Success_ExistingSameChecksum(t *testing.T) {
 
 	pusher := NewImagePusher(mockDocker, mockS3, mockGit, "test-bucket")
 
-	err := pusher.Push(context.Background(), "myapp:latest")
+	_, err := pusher.Push(context.Background(), "myapp:latest")
 
 	assert.NoError(t, err)
 	mockGit.AssertExpectations(t)
@@ -208,7 +208,7 @@ func TestImagePusher_Push_GitError(t *testing.T) {
 
 	pusher := NewImagePusher(mockDocker, mockS3, mockGit, "test-bucket")
 
-	err := pusher.Push(context.Background(), "myapp:latest")
+	_, err := pusher.Push(context.Background(), "myapp:latest")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to get git hash")
@@ -260,7 +260,7 @@ func TestImagePusher_Push_Success_ChecksumMismatch(t *testing.T) {
 
 	pusher := NewImagePusher(mockDocker, mockS3, mockGit, "test-bucket")
 
-	err := pusher.Push(context.Background(), "myapp:latest")
+	_, err := pusher.Push(context.Background(), "myapp:latest")
 
 	assert.NoError(t, err)
 	mockGit.AssertExpectations(t)
@@ -280,7 +280,7 @@ func TestImagePusher_Push_DockerError(t *testing.T) {
 
 	pusher := NewImagePusher(mockDocker, mockS3, mockGit, "test-bucket")
 
-	err := pusher.Push(context.Background(), "myapp:latest")
+	_, err := pusher.Push(context.Background(), "myapp:latest")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to export image")
@@ -327,7 +327,7 @@ func TestImagePusher_Push_VerifyGzipCompression(t *testing.T) {
 
 	pusher := NewImagePusher(mockDocker, mockS3, mockGit, "test-bucket")
 
-	err := pusher.Push(context.Background(), "myapp:latest")
+	_, err := pusher.Push(context.Background(), "myapp:latest")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, uploadedData, "Should have captured uploaded data")

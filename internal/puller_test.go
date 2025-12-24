@@ -44,7 +44,7 @@ func TestImagePuller_Pull_Success_DirectImage(t *testing.T) {
 
 	puller := NewImagePuller(mockDocker, mockS3, "test-bucket")
 
-	err := puller.Pull(context.Background(), "myapp", "production")
+	_, err := puller.Pull(context.Background(), "myapp", "production")
 
 	assert.NoError(t, err)
 	mockS3.AssertExpectations(t)
@@ -94,7 +94,7 @@ func TestImagePuller_Pull_Success_TagReference(t *testing.T) {
 
 	puller := NewImagePuller(mockDocker, mockS3, "test-bucket")
 
-	err := puller.Pull(context.Background(), "myapp", "staging")
+	_, err := puller.Pull(context.Background(), "myapp", "staging")
 
 	assert.NoError(t, err)
 	mockS3.AssertExpectations(t)
@@ -110,7 +110,7 @@ func TestImagePuller_Pull_EnvironmentNotFound(t *testing.T) {
 
 	puller := NewImagePuller(mockDocker, mockS3, "test-bucket")
 
-	err := puller.Pull(context.Background(), "myapp", "nonexistent")
+	_, err := puller.Pull(context.Background(), "myapp", "nonexistent")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "environment pointer not found: myapp/nonexistent")
@@ -148,7 +148,7 @@ func TestImagePuller_PullFromTag_Success(t *testing.T) {
 
 	puller := NewImagePuller(mockDocker, mockS3, "test-bucket")
 
-	err := puller.PullFromTag(context.Background(), "myapp", "v1.2.0")
+	_, err := puller.PullFromTag(context.Background(), "myapp", "v1.2.0")
 
 	assert.NoError(t, err)
 	mockS3.AssertExpectations(t)
@@ -164,7 +164,7 @@ func TestImagePuller_PullFromTag_TagNotFound(t *testing.T) {
 
 	puller := NewImagePuller(mockDocker, mockS3, "test-bucket")
 
-	err := puller.PullFromTag(context.Background(), "myapp", "v9.9.9")
+	_, err := puller.PullFromTag(context.Background(), "myapp", "v9.9.9")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "tag not found: myapp/v9.9.9")
@@ -208,7 +208,7 @@ func TestImagePuller_Pull_ChecksumMismatch_RetrySuccess(t *testing.T) {
 
 	puller := NewImagePuller(mockDocker, mockS3, "test-bucket")
 
-	err := puller.Pull(context.Background(), "myapp", "production")
+	_, err := puller.Pull(context.Background(), "myapp", "production")
 
 	assert.NoError(t, err)
 	mockS3.AssertExpectations(t)
@@ -246,7 +246,7 @@ func TestImagePuller_Pull_DockerImportFailure(t *testing.T) {
 
 	puller := NewImagePuller(mockDocker, mockS3, "test-bucket")
 
-	err := puller.Pull(context.Background(), "myapp", "production")
+	_, err := puller.Pull(context.Background(), "myapp", "production")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to import image to Docker")
@@ -285,7 +285,7 @@ func TestImagePuller_Pull_Skip_ImageAlreadyExists(t *testing.T) {
 
 	puller := NewImagePuller(mockDocker, mockS3, "test-bucket")
 
-	err := puller.Pull(context.Background(), "myapp", "production")
+	_, err := puller.Pull(context.Background(), "myapp", "production")
 
 	assert.NoError(t, err)
 	mockS3.AssertExpectations(t)

@@ -30,7 +30,7 @@ func TestImageTagger_Tag_Success(t *testing.T) {
 
 	tagger := NewImageTagger(mockS3, "test-bucket")
 
-	err := tagger.Tag(context.Background(), "myapp:20250721-1430-abc1234", "v1.2.0")
+	_, err := tagger.Tag(context.Background(), "myapp:20250721-1430-abc1234", "v1.2.0")
 
 	assert.NoError(t, err)
 	mockS3.AssertExpectations(t)
@@ -44,7 +44,7 @@ func TestImageTagger_Tag_ImageNotFound(t *testing.T) {
 
 	tagger := NewImageTagger(mockS3, "test-bucket")
 
-	err := tagger.Tag(context.Background(), "myapp:20250721-1430-abc1234", "v1.2.0")
+	_, err := tagger.Tag(context.Background(), "myapp:20250721-1430-abc1234", "v1.2.0")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "image not found in S3")
@@ -55,7 +55,7 @@ func TestImageTagger_Tag_InvalidImageReference(t *testing.T) {
 	mockS3 := new(MockS3Client)
 	tagger := NewImageTagger(mockS3, "test-bucket")
 
-	err := tagger.Tag(context.Background(), "invalid-format", "v1.2.0")
+	_, err := tagger.Tag(context.Background(), "invalid-format", "v1.2.0")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to parse image reference")
@@ -86,7 +86,7 @@ func TestImagePromoter_Promote_DirectImage_Success(t *testing.T) {
 
 	promoter := NewImagePromoter(mockS3, "test-bucket")
 
-	err := promoter.Promote(context.Background(), "myapp:20250721-1430-abc1234", "production")
+	_, err := promoter.Promote(context.Background(), "myapp:20250721-1430-abc1234", "production")
 
 	assert.NoError(t, err)
 	mockS3.AssertExpectations(t)
@@ -100,7 +100,7 @@ func TestImagePromoter_Promote_DirectImage_ImageNotFound(t *testing.T) {
 
 	promoter := NewImagePromoter(mockS3, "test-bucket")
 
-	err := promoter.Promote(context.Background(), "myapp:20250721-1430-abc1234", "production")
+	_, err := promoter.Promote(context.Background(), "myapp:20250721-1430-abc1234", "production")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "image not found in S3")
@@ -137,7 +137,7 @@ func TestImagePromoter_PromoteFromTag_Success(t *testing.T) {
 
 	promoter := NewImagePromoter(mockS3, "test-bucket")
 
-	err := promoter.PromoteFromTag(context.Background(), "myapp", "v1.2.0", "staging")
+	_, err := promoter.PromoteFromTag(context.Background(), "myapp", "v1.2.0", "staging")
 
 	assert.NoError(t, err)
 	mockS3.AssertExpectations(t)
@@ -151,7 +151,7 @@ func TestImagePromoter_PromoteFromTag_TagNotFound(t *testing.T) {
 
 	promoter := NewImagePromoter(mockS3, "test-bucket")
 
-	err := promoter.PromoteFromTag(context.Background(), "myapp", "v1.2.0", "staging")
+	_, err := promoter.PromoteFromTag(context.Background(), "myapp", "v1.2.0", "staging")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "tag not found")
@@ -167,7 +167,7 @@ func TestImagePromoter_PromoteFromTag_DownloadError(t *testing.T) {
 
 	promoter := NewImagePromoter(mockS3, "test-bucket")
 
-	err := promoter.PromoteFromTag(context.Background(), "myapp", "v1.2.0", "staging")
+	_, err := promoter.PromoteFromTag(context.Background(), "myapp", "v1.2.0", "staging")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to download tag")

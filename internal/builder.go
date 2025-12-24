@@ -17,7 +17,7 @@ func NewImageBuilder(docker DockerClient, git GitClient) *ImageBuilder {
 	}
 }
 
-func (b *ImageBuilder) Build(ctx context.Context, appName string, contextPath string, dockerfile string, gitPath string, platform string) (string, error) {
+func (b *ImageBuilder) Build(ctx context.Context, appName string, contextPath string, dockerfile string, gitPath string, platform string) (*BuildResult, error) {
 	LogInfo("Starting build for app: %s", appName)
 	LogDebug("Build context: %s, Git path: %s, Dockerfile: %s, Platform: %s", contextPath, gitPath, dockerfile, platform)
 
@@ -25,12 +25,12 @@ func (b *ImageBuilder) Build(ctx context.Context, appName string, contextPath st
 	isDirty, err := b.git.IsRepositoryDirty(gitPath)
 	if err != nil {
 		LogError("Failed to check repository status: %v", err)
-		return "", fmt.Errorf("failed to check repository status: %w", err)
+		return nil, fmt.Errorf("failed to check repository status: %w", err)
 	}
 
 	if isDirty {
 		LogError("Repository has uncommitted changes - commit all changes before building")
-		return "", fmt.Errorf("repository has uncommitted changes - commit all changes before building")
+		return nil, fmt.Errorf("repository has uncommitted changes - commit all changes before building")
 	}
 
 	LogDebug("Repository is clean, proceeding with build")
@@ -39,14 +39,14 @@ func (b *ImageBuilder) Build(ctx context.Context, appName string, contextPath st
 	gitHash, err := b.git.GetCurrentHash(gitPath)
 	if err != nil {
 		LogError("Failed to get git hash: %v", err)
-		return "", fmt.Errorf("failed to get git hash: %w", err)
+		return nil, fmt.Errorf("failed to get git hash: %w", err)
 	}
 
 	LogDebug("Getting git commit timestamp")
 	timestamp, err := b.git.GetCommitTimestamp(gitPath)
 	if err != nil {
 		LogError("Failed to get commit timestamp: %v", err)
-		return "", fmt.Errorf("failed to get commit timestamp: %w", err)
+		return nil, fmt.Errorf("failed to get commit timestamp: %w", err)
 	}
 
 	tag := fmt.Sprintf("%s:%s-%s", appName, timestamp, gitHash)
@@ -57,9 +57,14 @@ func (b *ImageBuilder) Build(ctx context.Context, appName string, contextPath st
 	// Use contextPath for Docker build, gitPath for git operations
 	if err := b.docker.BuildImage(ctx, contextPath, dockerfile, []string{tag}, platform); err != nil {
 		LogError("Failed to build image %s: %v", tag, err)
-		return "", fmt.Errorf("failed to build image: %w", err)
+		return nil, fmt.Errorf("failed to build image: %w", err)
 	}
 
 	LogInfo("Successfully built %s", tag)
-	return tag, nil
+	return &BuildResult{
+		ImageTag: tag,
+		AppName:  appName,
+		GitHash:  gitHash,
+		GitTime:  timestamp,
+	}, nil
 }

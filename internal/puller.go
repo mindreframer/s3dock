@@ -29,7 +29,7 @@ func NewImagePuller(docker DockerClient, s3 S3Client, bucket string) *ImagePulle
 }
 
 // Pull image from environment (e.g., "myapp production")
-func (p *ImagePuller) Pull(ctx context.Context, appName, environment string) error {
+func (p *ImagePuller) Pull(ctx context.Context, appName, environment string) (*PullResult, error) {
 	LogInfo("Pulling %s from %s environment", appName, environment)
 
 	// Get environment pointer
@@ -39,12 +39,12 @@ func (p *ImagePuller) Pull(ctx context.Context, appName, environment string) err
 	exists, err := p.s3.Exists(ctx, p.bucket, envKey)
 	if err != nil {
 		LogError("Failed to check environment pointer existence: %v", err)
-		return fmt.Errorf("failed to check environment pointer existence: %w", err)
+		return nil, fmt.Errorf("failed to check environment pointer existence: %w", err)
 	}
 
 	if !exists {
 		LogError("Environment pointer not found: %s/%s", appName, environment)
-		return fmt.Errorf("environment pointer not found: %s/%s", appName, environment)
+		return nil, fmt.Errorf("environment pointer not found: %s/%s", appName, environment)
 	}
 
 	// Download environment pointer
@@ -52,13 +52,13 @@ func (p *ImagePuller) Pull(ctx context.Context, appName, environment string) err
 	pointerData, err := p.s3.Download(ctx, p.bucket, envKey)
 	if err != nil {
 		LogError("Failed to download environment pointer: %v", err)
-		return fmt.Errorf("failed to download environment pointer: %w", err)
+		return nil, fmt.Errorf("failed to download environment pointer: %w", err)
 	}
 
 	pointer, err := PointerMetadataFromJSON(pointerData)
 	if err != nil {
 		LogError("Failed to parse environment pointer: %v", err)
-		return fmt.Errorf("failed to parse environment pointer: %w", err)
+		return nil, fmt.Errorf("failed to parse environment pointer: %w", err)
 	}
 
 	LogDebug("Environment pointer type: %s, target: %s", pointer.TargetType, pointer.TargetPath)
@@ -78,13 +78,13 @@ func (p *ImagePuller) Pull(ctx context.Context, appName, environment string) err
 		tagData, err := p.s3.Download(ctx, p.bucket, pointer.TargetPath)
 		if err != nil {
 			LogError("Failed to download tag pointer: %v", err)
-			return fmt.Errorf("failed to download tag pointer: %w", err)
+			return nil, fmt.Errorf("failed to download tag pointer: %w", err)
 		}
 
 		tagPointer, err := PointerMetadataFromJSON(tagData)
 		if err != nil {
 			LogError("Failed to parse tag pointer: %v", err)
-			return fmt.Errorf("failed to parse tag pointer: %w", err)
+			return nil, fmt.Errorf("failed to parse tag pointer: %w", err)
 		}
 
 		imageS3Path = tagPointer.TargetPath
@@ -92,15 +92,25 @@ func (p *ImagePuller) Pull(ctx context.Context, appName, environment string) err
 
 	default:
 		LogError("Unknown pointer type: %s", pointer.TargetType)
-		return fmt.Errorf("unknown pointer type: %s", pointer.TargetType)
+		return nil, fmt.Errorf("unknown pointer type: %s", pointer.TargetType)
 	}
 
 	// Download and import image
-	return p.downloadAndImportImage(ctx, appName, environment, imageS3Path)
+	imageRef, skipped, err := p.downloadAndImportImage(ctx, appName, environment, imageS3Path)
+	if err != nil {
+		return nil, err
+	}
+
+	return &PullResult{
+		ImageRef:   imageRef,
+		Source:     environment,
+		SourceType: "environment",
+		Skipped:    skipped,
+	}, nil
 }
 
 // PullFromTag pulls image directly from tag (e.g., "myapp v1.2.0")
-func (p *ImagePuller) PullFromTag(ctx context.Context, appName, version string) error {
+func (p *ImagePuller) PullFromTag(ctx context.Context, appName, version string) (*PullResult, error) {
 	LogInfo("Pulling %s tag %s", appName, version)
 
 	// Get tag pointer
@@ -110,12 +120,12 @@ func (p *ImagePuller) PullFromTag(ctx context.Context, appName, version string) 
 	exists, err := p.s3.Exists(ctx, p.bucket, tagKey)
 	if err != nil {
 		LogError("Failed to check tag existence: %v", err)
-		return fmt.Errorf("failed to check tag existence: %w", err)
+		return nil, fmt.Errorf("failed to check tag existence: %w", err)
 	}
 
 	if !exists {
 		LogError("Tag not found: %s/%s", appName, version)
-		return fmt.Errorf("tag not found: %s/%s", appName, version)
+		return nil, fmt.Errorf("tag not found: %s/%s", appName, version)
 	}
 
 	// Download tag pointer
@@ -123,24 +133,35 @@ func (p *ImagePuller) PullFromTag(ctx context.Context, appName, version string) 
 	tagData, err := p.s3.Download(ctx, p.bucket, tagKey)
 	if err != nil {
 		LogError("Failed to download tag pointer: %v", err)
-		return fmt.Errorf("failed to download tag pointer: %w", err)
+		return nil, fmt.Errorf("failed to download tag pointer: %w", err)
 	}
 
 	tagPointer, err := PointerMetadataFromJSON(tagData)
 	if err != nil {
 		LogError("Failed to parse tag pointer: %v", err)
-		return fmt.Errorf("failed to parse tag pointer: %w", err)
+		return nil, fmt.Errorf("failed to parse tag pointer: %w", err)
 	}
 
 	imageS3Path := tagPointer.TargetPath
 	LogDebug("Tag points to image: %s", imageS3Path)
 
 	// Download and import image
-	return p.downloadAndImportImage(ctx, appName, version, imageS3Path)
+	imageRef, skipped, err := p.downloadAndImportImage(ctx, appName, version, imageS3Path)
+	if err != nil {
+		return nil, err
+	}
+
+	return &PullResult{
+		ImageRef:   imageRef,
+		Source:     version,
+		SourceType: "tag",
+		Skipped:    skipped,
+	}, nil
 }
 
 // downloadAndImportImage handles the core download, verify, and import logic
-func (p *ImagePuller) downloadAndImportImage(ctx context.Context, appName, source, imageS3Path string) error {
+// Returns: imageRef, skipped, error
+func (p *ImagePuller) downloadAndImportImage(ctx context.Context, appName, source, imageS3Path string) (string, bool, error) {
 	// Get metadata path
 	metadataKey := GenerateMetadataKey(imageS3Path)
 	LogDebug("Getting metadata from: %s", metadataKey)
@@ -149,13 +170,13 @@ func (p *ImagePuller) downloadAndImportImage(ctx context.Context, appName, sourc
 	metadataData, err := p.s3.Download(ctx, p.bucket, metadataKey)
 	if err != nil {
 		LogError("Failed to download image metadata: %v", err)
-		return fmt.Errorf("failed to download image metadata: %w", err)
+		return "", false, fmt.Errorf("failed to download image metadata: %w", err)
 	}
 
 	metadata, err := ImageMetadataFromJSON(metadataData)
 	if err != nil {
 		LogError("Failed to parse image metadata: %v", err)
-		return fmt.Errorf("failed to parse image metadata: %w", err)
+		return "", false, fmt.Errorf("failed to parse image metadata: %w", err)
 	}
 
 	LogDebug("Image metadata - size: %d bytes, checksum: %s", metadata.Size, metadata.Checksum)
@@ -167,12 +188,12 @@ func (p *ImagePuller) downloadAndImportImage(ctx context.Context, appName, sourc
 	exists, err := p.docker.ImageExists(ctx, expectedImageTag)
 	if err != nil {
 		LogError("Failed to check if Docker image exists: %v", err)
-		return fmt.Errorf("failed to check if Docker image exists: %w", err)
+		return "", false, fmt.Errorf("failed to check if Docker image exists: %w", err)
 	}
 
 	if exists {
 		LogInfo("Image %s already exists in Docker, skipping download and import", expectedImageTag)
-		return nil
+		return expectedImageTag, true, nil
 	}
 
 	LogDebug("Image %s not found in Docker, proceeding with download", expectedImageTag)
@@ -181,7 +202,7 @@ func (p *ImagePuller) downloadAndImportImage(ctx context.Context, appName, sourc
 	tempFile, err := os.CreateTemp("", "s3dock-pull-*.tar.gz")
 	if err != nil {
 		LogError("Failed to create temp file: %v", err)
-		return fmt.Errorf("failed to create temp file: %w", err)
+		return "", false, fmt.Errorf("failed to create temp file: %w", err)
 	}
 	defer os.Remove(tempFile.Name()) // Always cleanup temp file
 	defer tempFile.Close()
@@ -222,30 +243,35 @@ func (p *ImagePuller) downloadAndImportImage(ctx context.Context, appName, sourc
 	}
 
 	if downloadErr != nil {
-		return fmt.Errorf("download failed after %d attempts: %w", maxRetries, downloadErr)
+		return "", false, fmt.Errorf("download failed after %d attempts: %w", maxRetries, downloadErr)
 	}
 
 	// Import to Docker
 	LogInfo("Importing image to Docker")
 	tempFile.Seek(0, 0)
 
-	spinner := progressbar.NewOptions(-1,
-		progressbar.OptionSetDescription("Importing to Docker..."),
-		progressbar.OptionSpinnerType(14),
-		progressbar.OptionSetWidth(50),
-	)
-	spinner.RenderBlank()
+	var spinner *progressbar.ProgressBar
+	if !IsJSONOutput() {
+		spinner = progressbar.NewOptions(-1,
+			progressbar.OptionSetDescription("Importing to Docker..."),
+			progressbar.OptionSpinnerType(14),
+			progressbar.OptionSetWidth(50),
+		)
+		spinner.RenderBlank()
+	}
 
 	err = p.importImageFromGzip(ctx, tempFile)
-	spinner.Finish()
+	if spinner != nil {
+		spinner.Finish()
+	}
 
 	if err != nil {
 		LogError("Failed to import image to Docker: %v", err)
-		return fmt.Errorf("failed to import image to Docker: %w", err)
+		return "", false, fmt.Errorf("failed to import image to Docker: %w", err)
 	}
 
 	LogInfo("Successfully pulled and imported %s from %s", appName, source)
-	return nil
+	return expectedImageTag, false, nil
 }
 
 // downloadImageWithProgress downloads image from S3 with progress bar

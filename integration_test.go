@@ -53,7 +53,7 @@ func TestIntegration_Push(t *testing.T) {
 
 	pusher := internal.NewImagePusher(dockerClient, s3Client, gitClient, bucket)
 
-	err = pusher.Push(ctx, imageRef)
+	_, err = pusher.Push(ctx, imageRef)
 	assert.NoError(t, err, "Integration test should pass with proper MinIO setup")
 }
 

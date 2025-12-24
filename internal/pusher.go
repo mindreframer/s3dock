@@ -31,19 +31,19 @@ func NewImagePusher(docker DockerClient, s3 S3Client, git GitClient, bucket stri
 	}
 }
 
-func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
+func (p *ImagePusher) Push(ctx context.Context, imageRef string) (*PushResult, error) {
 	LogInfo("Pushing image %s to S3", imageRef)
 
 	gitHash, err := p.git.GetCurrentHash(".")
 	if err != nil {
 		LogError("Failed to get git hash: %v", err)
-		return fmt.Errorf("failed to get git hash: %w", err)
+		return nil, fmt.Errorf("failed to get git hash: %w", err)
 	}
 
 	gitTime, err := p.git.GetCommitTimestamp(".")
 	if err != nil {
 		LogError("Failed to get git timestamp: %v", err)
-		return fmt.Errorf("failed to get git timestamp: %w", err)
+		return nil, fmt.Errorf("failed to get git timestamp: %w", err)
 	}
 
 	appName := ExtractAppName(imageRef)
@@ -61,22 +61,27 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 	exists, err := p.s3.Exists(ctx, p.bucket, metadataKey)
 	if err != nil {
 		LogError("Failed to check metadata existence: %v", err)
-		return fmt.Errorf("failed to check metadata existence: %w", err)
+		return nil, fmt.Errorf("failed to check metadata existence: %w", err)
 	}
 
 	LogDebug("Exporting Docker image %s", imageRef)
-	spinner := progressbar.NewOptions(-1,
-		progressbar.OptionSetDescription("Exporting Docker image..."),
-		progressbar.OptionSpinnerType(14),
-		progressbar.OptionSetWidth(50),
-	)
-	spinner.RenderBlank()
+	var spinner *progressbar.ProgressBar
+	if !IsJSONOutput() {
+		spinner = progressbar.NewOptions(-1,
+			progressbar.OptionSetDescription("Exporting Docker image..."),
+			progressbar.OptionSpinnerType(14),
+			progressbar.OptionSetWidth(50),
+		)
+		spinner.RenderBlank()
+	}
 
 	imageData, err := p.docker.ExportImage(ctx, imageRef)
-	spinner.Finish()
+	if spinner != nil {
+		spinner.Finish()
+	}
 	if err != nil {
 		LogError("Failed to export image: %v", err)
-		return fmt.Errorf("failed to export image: %w", err)
+		return nil, fmt.Errorf("failed to export image: %w", err)
 	}
 	defer imageData.Close()
 
@@ -103,7 +108,7 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 	metadata, _, err := CalculateMetadata(teeReader, gitHash, gitTime, imageRef, appName)
 	if err != nil {
 		LogError("Failed to calculate metadata: %v", err)
-		return fmt.Errorf("failed to calculate metadata: %w", err)
+		return nil, fmt.Errorf("failed to calculate metadata: %w", err)
 	}
 
 	LogDebug("Image checksum: %s, size: %d bytes", metadata.Checksum, metadata.Size)
@@ -114,13 +119,13 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 		existingMetadataBytes, err := p.s3.Download(ctx, p.bucket, metadataKey)
 		if err != nil {
 			LogError("Failed to download existing metadata: %v", err)
-			return fmt.Errorf("failed to download existing metadata: %w", err)
+			return nil, fmt.Errorf("failed to download existing metadata: %w", err)
 		}
 
 		existingMetadata, err := ImageMetadataFromJSON(existingMetadataBytes)
 		if err != nil {
 			LogError("Failed to parse existing metadata: %v", err)
-			return fmt.Errorf("failed to parse existing metadata: %w", err)
+			return nil, fmt.Errorf("failed to parse existing metadata: %w", err)
 		}
 
 		LogDebug("Comparing checksums - existing: %s, new: %s", existingMetadata.Checksum, metadata.Checksum)
@@ -133,7 +138,14 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 				p.audit.LogEvent(ctx, auditEvent)
 			}
 
-			return nil
+			return &PushResult{
+				ImageRef: imageRef,
+				S3Key:    s3Key,
+				Checksum: metadata.Checksum,
+				Size:     metadata.Size,
+				Skipped:  true,
+				Archived: false,
+			}, nil
 		}
 
 		// Checksums don't match - archive existing files
@@ -142,7 +154,7 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 
 		if err := p.archiveExistingFiles(ctx, s3Key, metadataKey); err != nil {
 			LogError("Failed to archive existing files: %v", err)
-			return fmt.Errorf("failed to archive existing files: %w", err)
+			return nil, fmt.Errorf("failed to archive existing files: %w", err)
 		}
 	}
 
@@ -150,7 +162,7 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 	LogDebug("Uploading image to S3: %s", s3Key)
 	if err := p.s3.UploadWithProgress(ctx, p.bucket, s3Key, &buf, metadata.Size, "Uploading image"); err != nil {
 		LogError("Failed to upload image to S3: %v", err)
-		return fmt.Errorf("failed to upload image to S3: %w", err)
+		return nil, fmt.Errorf("failed to upload image to S3: %w", err)
 	}
 
 	// Upload metadata
@@ -158,12 +170,12 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 	metadataJSON, err := metadata.ToJSON()
 	if err != nil {
 		LogError("Failed to serialize metadata: %v", err)
-		return fmt.Errorf("failed to serialize metadata: %w", err)
+		return nil, fmt.Errorf("failed to serialize metadata: %w", err)
 	}
 
 	if err := p.s3.Upload(ctx, p.bucket, metadataKey, strings.NewReader(string(metadataJSON))); err != nil {
 		LogError("Failed to upload metadata to S3: %v", err)
-		return fmt.Errorf("failed to upload metadata to S3: %w", err)
+		return nil, fmt.Errorf("failed to upload metadata to S3: %w", err)
 	}
 
 	LogInfo("Successfully pushed %s to s3://%s/%s (checksum: %s)", imageRef, p.bucket, s3Key, metadata.Checksum)
@@ -175,7 +187,14 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) error {
 		p.audit.LogEvent(ctx, auditEvent)
 	}
 
-	return nil
+	return &PushResult{
+		ImageRef: imageRef,
+		S3Key:    s3Key,
+		Checksum: metadata.Checksum,
+		Size:     metadata.Size,
+		Skipped:  false,
+		Archived: wasArchived,
+	}, nil
 }
 
 func (p *ImagePusher) archiveExistingFiles(ctx context.Context, imageS3Key, metadataKey string) error {

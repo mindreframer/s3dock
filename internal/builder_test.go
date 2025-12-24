@@ -19,10 +19,14 @@ func TestImageBuilder_Build_Success(t *testing.T) {
 
 	builder := NewImageBuilder(mockDocker, mockGit)
 
-	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "")
+	result, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "")
 
 	assert.NoError(t, err)
-	assert.Equal(t, "myapp:20250721-1430-abc1234", tag)
+	assert.NotNil(t, result)
+	assert.Equal(t, "myapp:20250721-1430-abc1234", result.ImageTag)
+	assert.Equal(t, "myapp", result.AppName)
+	assert.Equal(t, "abc1234", result.GitHash)
+	assert.Equal(t, "20250721-1430", result.GitTime)
 	mockGit.AssertExpectations(t)
 	mockDocker.AssertExpectations(t)
 }
@@ -35,10 +39,10 @@ func TestImageBuilder_Build_DirtyRepository(t *testing.T) {
 
 	builder := NewImageBuilder(mockDocker, mockGit)
 
-	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "")
+	result, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "")
 
 	assert.Error(t, err)
-	assert.Empty(t, tag)
+	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "repository has uncommitted changes")
 	mockGit.AssertExpectations(t)
 }
@@ -52,10 +56,10 @@ func TestImageBuilder_Build_GitHashError(t *testing.T) {
 
 	builder := NewImageBuilder(mockDocker, mockGit)
 
-	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "")
+	result, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "")
 
 	assert.Error(t, err)
-	assert.Empty(t, tag)
+	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "failed to get git hash")
 	mockGit.AssertExpectations(t)
 }
@@ -70,10 +74,10 @@ func TestImageBuilder_Build_GitTimestampError(t *testing.T) {
 
 	builder := NewImageBuilder(mockDocker, mockGit)
 
-	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "")
+	result, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "")
 
 	assert.Error(t, err)
-	assert.Empty(t, tag)
+	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "failed to get commit timestamp")
 	mockGit.AssertExpectations(t)
 }
@@ -89,10 +93,10 @@ func TestImageBuilder_Build_DockerBuildError(t *testing.T) {
 
 	builder := NewImageBuilder(mockDocker, mockGit)
 
-	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "")
+	result, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "")
 
 	assert.Error(t, err)
-	assert.Empty(t, tag)
+	assert.Nil(t, result)
 	assert.Contains(t, err.Error(), "failed to build image")
 	mockGit.AssertExpectations(t)
 	mockDocker.AssertExpectations(t)
@@ -109,10 +113,11 @@ func TestImageBuilder_Build_WithPlatform(t *testing.T) {
 
 	builder := NewImageBuilder(mockDocker, mockGit)
 
-	tag, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "linux/amd64")
+	result, err := builder.Build(context.Background(), "myapp", ".", "Dockerfile", ".", "linux/amd64")
 
 	assert.NoError(t, err)
-	assert.Equal(t, "myapp:20250721-1430-abc1234", tag)
+	assert.NotNil(t, result)
+	assert.Equal(t, "myapp:20250721-1430-abc1234", result.ImageTag)
 	mockGit.AssertExpectations(t)
 	mockDocker.AssertExpectations(t)
 }

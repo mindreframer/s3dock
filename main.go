@@ -21,6 +21,7 @@ type GlobalFlags struct {
 	Bucket   string
 	LogLevel int
 	Help     bool
+	JSON     bool
 }
 
 func main() {
@@ -34,6 +35,13 @@ func main() {
 	// Set log level from global flags
 	if globalFlags.LogLevel > 0 {
 		internal.SetLogLevel(internal.LogLevel(globalFlags.LogLevel))
+	}
+
+	// Set JSON output mode
+	if globalFlags.JSON {
+		internal.SetOutputFormat(internal.OutputFormatJSON)
+		// Suppress logs in JSON mode (only errors go through OutputError)
+		internal.SetLogLevel(0) // Suppress all logs
 	}
 
 	if globalFlags.Help || len(remaining) == 0 {
@@ -60,7 +68,7 @@ func main() {
 	case "current":
 		handleCurrentCommand(globalFlags, commandArgs)
 	case "version", "--version", "-v":
-		handleVersionCommand(commandArgs)
+		handleVersionCommand(globalFlags, commandArgs)
 	case "list":
 		handleListCommand(globalFlags, commandArgs)
 	case "cleanup":
@@ -84,6 +92,7 @@ func printUsage() {
 	fmt.Println("  --profile <name>  Profile to use from config")
 	fmt.Println("  --bucket <name>   Override bucket name")
 	fmt.Println("  --log-level <n>   Log level (1=error, 2=info, 3=debug)")
+	fmt.Println("  --json            Output results as JSON for programmatic consumption")
 	fmt.Println("")
 	fmt.Println("Commands:")
 	fmt.Println("  build <app-name>    Build Docker image with git-based tag")
@@ -148,6 +157,8 @@ func parseGlobalFlags(args []string) (*GlobalFlags, []string) {
 			}
 		case "--help", "-h":
 			flags.Help = true
+		case "--json":
+			flags.JSON = true
 		default:
 			remaining = append(remaining, arg)
 		}
@@ -173,14 +184,23 @@ func handlePushCommand(globalFlags *GlobalFlags, args []string) {
 
 	resolved, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
 	if err != nil {
-		internal.LogError("Error loading config: %v", err)
+		internal.OutputError("push", err)
 		os.Exit(1)
 	}
 
-	if err := pushImageWithConfig(imageRef, resolved); err != nil {
-		internal.LogError("Error pushing image: %v", err)
+	result, err := pushImageWithConfig(imageRef, resolved, globalFlags)
+	if err != nil {
+		internal.OutputError("push", err)
 		os.Exit(1)
 	}
+
+	// JSON output
+	if globalFlags.JSON {
+		internal.OutputResult("push", result)
+		return
+	}
+
+	// Text output is handled by logs in the pusher
 }
 
 func handleConfigCommand(globalFlags *GlobalFlags, args []string) {
@@ -223,16 +243,31 @@ func handleConfigShow(globalFlags *GlobalFlags, args []string) {
 
 	config, err := internal.LoadConfig(configPath)
 	if err != nil {
-		internal.LogError("Error loading config: %v", err)
+		internal.OutputError("config show", err)
 		os.Exit(1)
 	}
 
 	if profileName != "" {
 		profile, exists := config.Profiles[profileName]
 		if !exists {
-			internal.LogError("Profile '%s' not found", profileName)
+			internal.OutputError("config show", fmt.Errorf("profile '%s' not found", profileName))
 			os.Exit(1)
 		}
+
+		// JSON output
+		if globalFlags.JSON {
+			result := internal.ConfigShowResult{
+				Profile:   profileName,
+				Bucket:    profile.Bucket,
+				Region:    profile.Region,
+				Endpoint:  profile.Endpoint,
+				AccessKey: profile.AccessKey,
+			}
+			internal.OutputResult("config show", result)
+			return
+		}
+
+		// Text output
 		fmt.Printf("Profile: %s\n", profileName)
 		fmt.Printf("  Bucket: %s\n", profile.Bucket)
 		fmt.Printf("  Region: %s\n", profile.Region)
@@ -245,16 +280,43 @@ func handleConfigShow(globalFlags *GlobalFlags, args []string) {
 		return
 	}
 
+	// JSON output for full config
+	if globalFlags.JSON {
+		// Show default profile info
+		defaultProfile := config.Profiles[config.DefaultProfile]
+		result := internal.ConfigShowResult{
+			Profile:   config.DefaultProfile,
+			Bucket:    defaultProfile.Bucket,
+			Region:    defaultProfile.Region,
+			Endpoint:  defaultProfile.Endpoint,
+			AccessKey: defaultProfile.AccessKey,
+		}
+		internal.OutputResult("config show", result)
+		return
+	}
+
+	// Text output
 	fmt.Print(config.String())
 }
 
 func handleConfigList(globalFlags *GlobalFlags, args []string) {
 	config, err := internal.LoadConfig(globalFlags.Config)
 	if err != nil {
-		internal.LogError("Error loading config: %v", err)
+		internal.OutputError("config list", err)
 		os.Exit(1)
 	}
 
+	// JSON output
+	if globalFlags.JSON {
+		result := internal.ConfigListResult{
+			Profiles:       config.GetProfileNames(),
+			DefaultProfile: config.DefaultProfile,
+		}
+		internal.OutputResult("config list", result)
+		return
+	}
+
+	// Text output
 	fmt.Printf("Available profiles:\n")
 	for _, name := range config.GetProfileNames() {
 		marker := " "
@@ -313,7 +375,7 @@ func handleConfigInit(globalFlags *GlobalFlags, args []string) {
 	internal.LogInfo("Created config file: %s", configPath)
 }
 
-func pushImageWithConfig(imageRef string, config *internal.ResolvedConfig) error {
+func pushImageWithConfig(imageRef string, config *internal.ResolvedConfig, globalFlags *GlobalFlags) (*internal.PushResult, error) {
 	ctx := context.Background()
 
 	os.Setenv("AWS_REGION", config.Region)
@@ -329,13 +391,13 @@ func pushImageWithConfig(imageRef string, config *internal.ResolvedConfig) error
 
 	dockerClient, err := internal.NewDockerClient()
 	if err != nil {
-		return fmt.Errorf("failed to create Docker client: %w", err)
+		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
 	defer dockerClient.Close()
 
 	s3Client, err := internal.NewS3Client(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create S3 client: %w", err)
+		return nil, fmt.Errorf("failed to create S3 client: %w", err)
 	}
 
 	gitClient := internal.NewGitClient()
@@ -436,18 +498,27 @@ func handleBuildCommand(globalFlags *GlobalFlags, args []string) {
 		}
 	}
 
-	if err := buildImageWithConfig(appName, contextPath, dockerfile, gitPath, platform); err != nil {
-		internal.LogError("Error building image: %v", err)
+	result, err := buildImageWithConfig(appName, contextPath, dockerfile, gitPath, platform)
+	if err != nil {
+		internal.OutputError("build", err)
 		os.Exit(1)
 	}
+
+	// JSON output
+	if globalFlags.JSON {
+		internal.OutputResult("build", result)
+		return
+	}
+
+	// Text output is handled by logs in the builder
 }
 
-func buildImageWithConfig(appName, contextPath, dockerfile, gitPath, platform string) error {
+func buildImageWithConfig(appName, contextPath, dockerfile, gitPath, platform string) (*internal.BuildResult, error) {
 	ctx := context.Background()
 
 	dockerClient, err := internal.NewDockerClient()
 	if err != nil {
-		return fmt.Errorf("failed to create Docker client: %w", err)
+		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
 	defer dockerClient.Close()
 
@@ -455,8 +526,7 @@ func buildImageWithConfig(appName, contextPath, dockerfile, gitPath, platform st
 
 	builder := internal.NewImageBuilder(dockerClient, gitClient)
 
-	_, err = builder.Build(ctx, appName, contextPath, dockerfile, gitPath, platform)
-	return err
+	return builder.Build(ctx, appName, contextPath, dockerfile, gitPath, platform)
 }
 
 func handleTagCommand(globalFlags *GlobalFlags, args []string) {
@@ -476,14 +546,23 @@ func handleTagCommand(globalFlags *GlobalFlags, args []string) {
 
 	resolved, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
 	if err != nil {
-		internal.LogError("Error loading config: %v", err)
+		internal.OutputError("tag", err)
 		os.Exit(1)
 	}
 
-	if err := tagImageWithConfig(imageRef, version, resolved); err != nil {
-		internal.LogError("Error tagging image: %v", err)
+	result, err := tagImageWithConfig(imageRef, version, resolved, globalFlags)
+	if err != nil {
+		internal.OutputError("tag", err)
 		os.Exit(1)
 	}
+
+	// JSON output
+	if globalFlags.JSON {
+		internal.OutputResult("tag", result)
+		return
+	}
+
+	// Text output is handled by logs in the tagger
 }
 
 func handlePromoteCommand(globalFlags *GlobalFlags, args []string) {
@@ -516,24 +595,35 @@ func handlePromoteCommand(globalFlags *GlobalFlags, args []string) {
 
 	resolved, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
 	if err != nil {
-		internal.LogError("Error loading config: %v", err)
+		internal.OutputError("promote", err)
 		os.Exit(1)
 	}
 
+	var result *internal.PromoteResult
 	if len(args) == 2 {
-		if err := promoteImageWithConfig(source, environment, resolved); err != nil {
-			internal.LogError("Error promoting image: %v", err)
+		result, err = promoteImageWithConfig(source, environment, resolved, globalFlags)
+		if err != nil {
+			internal.OutputError("promote", err)
 			os.Exit(1)
 		}
 	} else {
-		if err := promoteTagWithConfig(appName, version, environment, resolved); err != nil {
-			internal.LogError("Error promoting tag: %v", err)
+		result, err = promoteTagWithConfig(appName, version, environment, resolved, globalFlags)
+		if err != nil {
+			internal.OutputError("promote", err)
 			os.Exit(1)
 		}
 	}
+
+	// JSON output
+	if globalFlags.JSON {
+		internal.OutputResult("promote", result)
+		return
+	}
+
+	// Text output is handled by logs in the promoter
 }
 
-func tagImageWithConfig(imageRef, version string, config *internal.ResolvedConfig) error {
+func tagImageWithConfig(imageRef, version string, config *internal.ResolvedConfig, globalFlags *GlobalFlags) (*internal.TagResult, error) {
 	ctx := context.Background()
 
 	os.Setenv("AWS_REGION", config.Region)
@@ -549,7 +639,7 @@ func tagImageWithConfig(imageRef, version string, config *internal.ResolvedConfi
 
 	s3Client, err := internal.NewS3Client(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create S3 client: %w", err)
+		return nil, fmt.Errorf("failed to create S3 client: %w", err)
 	}
 
 	tagger := internal.NewImageTagger(s3Client, config.Bucket)
@@ -557,7 +647,7 @@ func tagImageWithConfig(imageRef, version string, config *internal.ResolvedConfi
 	return tagger.Tag(ctx, imageRef, version)
 }
 
-func promoteImageWithConfig(source, environment string, config *internal.ResolvedConfig) error {
+func promoteImageWithConfig(source, environment string, config *internal.ResolvedConfig, globalFlags *GlobalFlags) (*internal.PromoteResult, error) {
 	ctx := context.Background()
 
 	os.Setenv("AWS_REGION", config.Region)
@@ -573,7 +663,7 @@ func promoteImageWithConfig(source, environment string, config *internal.Resolve
 
 	s3Client, err := internal.NewS3Client(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create S3 client: %w", err)
+		return nil, fmt.Errorf("failed to create S3 client: %w", err)
 	}
 
 	promoter := internal.NewImagePromoter(s3Client, config.Bucket)
@@ -581,7 +671,7 @@ func promoteImageWithConfig(source, environment string, config *internal.Resolve
 	return promoter.Promote(ctx, source, environment)
 }
 
-func promoteTagWithConfig(appName, version, environment string, config *internal.ResolvedConfig) error {
+func promoteTagWithConfig(appName, version, environment string, config *internal.ResolvedConfig, globalFlags *GlobalFlags) (*internal.PromoteResult, error) {
 	ctx := context.Background()
 
 	os.Setenv("AWS_REGION", config.Region)
@@ -597,7 +687,7 @@ func promoteTagWithConfig(appName, version, environment string, config *internal
 
 	s3Client, err := internal.NewS3Client(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create S3 client: %w", err)
+		return nil, fmt.Errorf("failed to create S3 client: %w", err)
 	}
 
 	promoter := internal.NewImagePromoter(s3Client, config.Bucket)
@@ -618,27 +708,37 @@ func handlePullCommand(globalFlags *GlobalFlags, args []string) {
 	target := args[1]
 
 	// Determine if target is a version tag (starts with 'v') or environment
+	var result *internal.PullResult
+	var err error
 	if strings.HasPrefix(target, "v") && len(strings.Split(target, ".")) >= 2 {
 		// It's a version tag like v1.2.0
-		err := pullTagWithConfig(appName, target, globalFlags)
+		result, err = pullTagWithConfig(appName, target, globalFlags)
 		if err != nil {
-			internal.LogError("Failed to pull tag: %v", err)
+			internal.OutputError("pull", err)
 			os.Exit(1)
 		}
 	} else {
 		// It's an environment like production, staging
-		err := pullImageWithConfig(appName, target, globalFlags)
+		result, err = pullImageWithConfig(appName, target, globalFlags)
 		if err != nil {
-			internal.LogError("Failed to pull image: %v", err)
+			internal.OutputError("pull", err)
 			os.Exit(1)
 		}
 	}
+
+	// JSON output
+	if globalFlags.JSON {
+		internal.OutputResult("pull", result)
+		return
+	}
+
+	// Text output is handled by logs in the puller
 }
 
-func pullImageWithConfig(appName, environment string, globalFlags *GlobalFlags) error {
+func pullImageWithConfig(appName, environment string, globalFlags *GlobalFlags) (*internal.PullResult, error) {
 	config, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	ctx := context.Background()
@@ -655,12 +755,12 @@ func pullImageWithConfig(appName, environment string, globalFlags *GlobalFlags) 
 
 	s3Client, err := internal.NewS3Client(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create S3 client: %w", err)
+		return nil, fmt.Errorf("failed to create S3 client: %w", err)
 	}
 
 	dockerClient, err := internal.NewDockerClient()
 	if err != nil {
-		return fmt.Errorf("failed to create Docker client: %w", err)
+		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
 
 	puller := internal.NewImagePuller(dockerClient, s3Client, config.Bucket)
@@ -668,10 +768,10 @@ func pullImageWithConfig(appName, environment string, globalFlags *GlobalFlags) 
 	return puller.Pull(ctx, appName, environment)
 }
 
-func pullTagWithConfig(appName, version string, globalFlags *GlobalFlags) error {
+func pullTagWithConfig(appName, version string, globalFlags *GlobalFlags) (*internal.PullResult, error) {
 	config, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	ctx := context.Background()
@@ -688,12 +788,12 @@ func pullTagWithConfig(appName, version string, globalFlags *GlobalFlags) error 
 
 	s3Client, err := internal.NewS3Client(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create S3 client: %w", err)
+		return nil, fmt.Errorf("failed to create S3 client: %w", err)
 	}
 
 	dockerClient, err := internal.NewDockerClient()
 	if err != nil {
-		return fmt.Errorf("failed to create Docker client: %w", err)
+		return nil, fmt.Errorf("failed to create Docker client: %w", err)
 	}
 
 	puller := internal.NewImagePuller(dockerClient, s3Client, config.Bucket)
@@ -703,7 +803,7 @@ func pullTagWithConfig(appName, version string, globalFlags *GlobalFlags) error 
 
 func handleCurrentCommand(globalFlags *GlobalFlags, args []string) {
 	if len(args) < 2 {
-		internal.LogError("Current command requires app name and environment")
+		internal.OutputError("current", fmt.Errorf("Current command requires app name and environment"))
 		fmt.Fprintf(os.Stderr, "Usage:\n")
 		fmt.Fprintf(os.Stderr, "  %s current <app> <environment>    # Show current image for environment (e.g., production, staging)\n", os.Args[0])
 		os.Exit(1)
@@ -712,49 +812,45 @@ func handleCurrentCommand(globalFlags *GlobalFlags, args []string) {
 	appName := args[0]
 	environment := args[1]
 
-	err := getCurrentImageWithConfig(appName, environment, globalFlags)
-	if err != nil {
-		internal.LogError("Failed to get current image: %v", err)
-		os.Exit(1)
-	}
-}
-
-func getCurrentImageWithConfig(appName, environment string, globalFlags *GlobalFlags) error {
 	config, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
 	if err != nil {
-		return err
+		internal.OutputError("current", err)
+		os.Exit(1)
 	}
 
 	ctx := context.Background()
-
-	// Set environment variables for AWS configuration
-	os.Setenv("AWS_REGION", config.Region)
-	if config.Endpoint != "" {
-		os.Setenv("AWS_ENDPOINT_URL", config.Endpoint)
-	}
-	if config.AccessKey != "" && config.SecretKey != "" {
-		os.Setenv("AWS_ACCESS_KEY_ID", config.AccessKey)
-		os.Setenv("AWS_SECRET_ACCESS_KEY", config.SecretKey)
-	}
+	setupAWSEnv(config)
 
 	s3Client, err := internal.NewS3Client(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create S3 client: %w", err)
+		internal.OutputError("current", fmt.Errorf("failed to create S3 client: %w", err))
+		os.Exit(1)
 	}
 
 	currentService := internal.NewCurrentService(s3Client, config.Bucket)
 
 	imageRef, err := currentService.GetCurrentImage(ctx, appName, environment)
 	if err != nil {
-		return err
+		internal.OutputError("current", err)
+		os.Exit(1)
 	}
 
-	// Output the current image reference
+	// JSON output
+	if globalFlags.JSON {
+		result := internal.CurrentResult{
+			AppName:     appName,
+			Environment: environment,
+			ImageRef:    imageRef,
+		}
+		internal.OutputResult("current", result)
+		return
+	}
+
+	// Text output
 	fmt.Println(imageRef)
-	return nil
 }
 
-func handleVersionCommand(args []string) {
+func handleVersionCommand(globalFlags *GlobalFlags, args []string) {
 	showFull := false
 
 	// Check for --full or --detailed flag
@@ -765,6 +861,18 @@ func handleVersionCommand(args []string) {
 		}
 	}
 
+	// JSON output
+	if globalFlags.JSON {
+		result := internal.VersionResult{
+			Version: version,
+			Commit:  commit,
+			Date:    date,
+		}
+		internal.OutputResult("version", result)
+		return
+	}
+
+	// Text output
 	if showFull {
 		fmt.Printf("s3dock version %s\n", version)
 		fmt.Printf("commit: %s\n", commit)
@@ -821,7 +929,7 @@ func handleListCommand(globalFlags *GlobalFlags, args []string) {
 func handleListApps(globalFlags *GlobalFlags) {
 	config, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
 	if err != nil {
-		internal.LogError("Error loading config: %v", err)
+		internal.OutputError("list apps", err)
 		os.Exit(1)
 	}
 
@@ -830,7 +938,7 @@ func handleListApps(globalFlags *GlobalFlags) {
 
 	s3Client, err := internal.NewS3Client(ctx)
 	if err != nil {
-		internal.LogError("Failed to create S3 client: %v", err)
+		internal.OutputError("list apps", fmt.Errorf("failed to create S3 client: %w", err))
 		os.Exit(1)
 	}
 
@@ -838,10 +946,18 @@ func handleListApps(globalFlags *GlobalFlags) {
 
 	apps, err := listService.ListApps(ctx)
 	if err != nil {
-		internal.LogError("Failed to list apps: %v", err)
+		internal.OutputError("list apps", err)
 		os.Exit(1)
 	}
 
+	// JSON output
+	if globalFlags.JSON {
+		result := internal.ListAppsResult{Apps: apps}
+		internal.OutputResult("list apps", result)
+		return
+	}
+
+	// Text output
 	if len(apps) == 0 {
 		fmt.Println("No apps found")
 		return
@@ -854,7 +970,7 @@ func handleListApps(globalFlags *GlobalFlags) {
 
 func handleListImages(globalFlags *GlobalFlags, args []string) {
 	if len(args) == 0 {
-		internal.LogError("list images requires app name")
+		internal.OutputError("list images", fmt.Errorf("list images requires app name"))
 		fmt.Fprintf(os.Stderr, "Usage: s3dock list images <app> [--month YYYYMM]\n")
 		os.Exit(1)
 	}
@@ -872,7 +988,7 @@ func handleListImages(globalFlags *GlobalFlags, args []string) {
 
 	config, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
 	if err != nil {
-		internal.LogError("Error loading config: %v", err)
+		internal.OutputError("list images", err)
 		os.Exit(1)
 	}
 
@@ -881,7 +997,7 @@ func handleListImages(globalFlags *GlobalFlags, args []string) {
 
 	s3Client, err := internal.NewS3Client(ctx)
 	if err != nil {
-		internal.LogError("Failed to create S3 client: %v", err)
+		internal.OutputError("list images", fmt.Errorf("failed to create S3 client: %w", err))
 		os.Exit(1)
 	}
 
@@ -889,10 +1005,26 @@ func handleListImages(globalFlags *GlobalFlags, args []string) {
 
 	images, err := listService.ListImages(ctx, appName, yearMonth)
 	if err != nil {
-		internal.LogError("Failed to list images: %v", err)
+		internal.OutputError("list images", err)
 		os.Exit(1)
 	}
 
+	// JSON output
+	if globalFlags.JSON {
+		jsonImages := make([]internal.ImageInfoJSON, len(images))
+		for i, img := range images {
+			jsonImages[i] = img.ToJSON()
+		}
+		result := internal.ListImagesResult{
+			AppName:   appName,
+			YearMonth: yearMonth,
+			Images:    jsonImages,
+		}
+		internal.OutputResult("list images", result)
+		return
+	}
+
+	// Text output
 	if len(images) == 0 {
 		fmt.Printf("No images found for %s\n", appName)
 		return
@@ -905,7 +1037,7 @@ func handleListImages(globalFlags *GlobalFlags, args []string) {
 
 func handleListTags(globalFlags *GlobalFlags, args []string) {
 	if len(args) == 0 {
-		internal.LogError("list tags requires app name")
+		internal.OutputError("list tags", fmt.Errorf("list tags requires app name"))
 		fmt.Fprintf(os.Stderr, "Usage: s3dock list tags <app>\n")
 		os.Exit(1)
 	}
@@ -914,7 +1046,7 @@ func handleListTags(globalFlags *GlobalFlags, args []string) {
 
 	config, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
 	if err != nil {
-		internal.LogError("Error loading config: %v", err)
+		internal.OutputError("list tags", err)
 		os.Exit(1)
 	}
 
@@ -923,7 +1055,7 @@ func handleListTags(globalFlags *GlobalFlags, args []string) {
 
 	s3Client, err := internal.NewS3Client(ctx)
 	if err != nil {
-		internal.LogError("Failed to create S3 client: %v", err)
+		internal.OutputError("list tags", fmt.Errorf("failed to create S3 client: %w", err))
 		os.Exit(1)
 	}
 
@@ -931,10 +1063,25 @@ func handleListTags(globalFlags *GlobalFlags, args []string) {
 
 	tags, err := listService.ListTags(ctx, appName)
 	if err != nil {
-		internal.LogError("Failed to list tags: %v", err)
+		internal.OutputError("list tags", err)
 		os.Exit(1)
 	}
 
+	// JSON output
+	if globalFlags.JSON {
+		jsonTags := make([]internal.TagInfoJSON, len(tags))
+		for i, tag := range tags {
+			jsonTags[i] = tag.ToJSON()
+		}
+		result := internal.ListTagsResult{
+			AppName: appName,
+			Tags:    jsonTags,
+		}
+		internal.OutputResult("list tags", result)
+		return
+	}
+
+	// Text output
 	if len(tags) == 0 {
 		fmt.Printf("No tags found for %s\n", appName)
 		return
@@ -947,7 +1094,7 @@ func handleListTags(globalFlags *GlobalFlags, args []string) {
 
 func handleListEnvironments(globalFlags *GlobalFlags, args []string) {
 	if len(args) == 0 {
-		internal.LogError("list envs requires app name")
+		internal.OutputError("list envs", fmt.Errorf("list envs requires app name"))
 		fmt.Fprintf(os.Stderr, "Usage: s3dock list envs <app>\n")
 		os.Exit(1)
 	}
@@ -956,7 +1103,7 @@ func handleListEnvironments(globalFlags *GlobalFlags, args []string) {
 
 	config, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
 	if err != nil {
-		internal.LogError("Error loading config: %v", err)
+		internal.OutputError("list envs", err)
 		os.Exit(1)
 	}
 
@@ -965,7 +1112,7 @@ func handleListEnvironments(globalFlags *GlobalFlags, args []string) {
 
 	s3Client, err := internal.NewS3Client(ctx)
 	if err != nil {
-		internal.LogError("Failed to create S3 client: %v", err)
+		internal.OutputError("list envs", fmt.Errorf("failed to create S3 client: %w", err))
 		os.Exit(1)
 	}
 
@@ -973,10 +1120,25 @@ func handleListEnvironments(globalFlags *GlobalFlags, args []string) {
 
 	envs, err := listService.ListEnvironments(ctx, appName)
 	if err != nil {
-		internal.LogError("Failed to list environments: %v", err)
+		internal.OutputError("list envs", err)
 		os.Exit(1)
 	}
 
+	// JSON output
+	if globalFlags.JSON {
+		jsonEnvs := make([]internal.EnvInfoJSON, len(envs))
+		for i, env := range envs {
+			jsonEnvs[i] = env.ToJSON()
+		}
+		result := internal.ListEnvsResult{
+			AppName:      appName,
+			Environments: jsonEnvs,
+		}
+		internal.OutputResult("list envs", result)
+		return
+	}
+
+	// Text output
 	if len(envs) == 0 {
 		fmt.Printf("No environments found for %s\n", appName)
 		return
@@ -993,7 +1155,7 @@ func handleListEnvironments(globalFlags *GlobalFlags, args []string) {
 
 func handleListTagFor(globalFlags *GlobalFlags, args []string) {
 	if len(args) < 2 {
-		internal.LogError("list tag-for requires app name and environment")
+		internal.OutputError("list tag-for", fmt.Errorf("list tag-for requires app name and environment"))
 		fmt.Fprintf(os.Stderr, "Usage: s3dock list tag-for <app> <env>\n")
 		os.Exit(1)
 	}
@@ -1003,7 +1165,7 @@ func handleListTagFor(globalFlags *GlobalFlags, args []string) {
 
 	config, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
 	if err != nil {
-		internal.LogError("Error loading config: %v", err)
+		internal.OutputError("list tag-for", err)
 		os.Exit(1)
 	}
 
@@ -1012,7 +1174,7 @@ func handleListTagFor(globalFlags *GlobalFlags, args []string) {
 
 	s3Client, err := internal.NewS3Client(ctx)
 	if err != nil {
-		internal.LogError("Failed to create S3 client: %v", err)
+		internal.OutputError("list tag-for", fmt.Errorf("failed to create S3 client: %w", err))
 		os.Exit(1)
 	}
 
@@ -1020,10 +1182,23 @@ func handleListTagFor(globalFlags *GlobalFlags, args []string) {
 
 	tag, err := listService.GetTagForEnvironment(ctx, appName, environment)
 	if err != nil {
-		internal.LogError("Failed to get tag for environment: %v", err)
+		internal.OutputError("list tag-for", err)
 		os.Exit(1)
 	}
 
+	// JSON output
+	if globalFlags.JSON {
+		result := internal.ListTagForResult{
+			AppName:     appName,
+			Environment: environment,
+			Tag:         tag,
+			Direct:      tag == "",
+		}
+		internal.OutputResult("list tag-for", result)
+		return
+	}
+
+	// Text output
 	if tag == "" {
 		fmt.Printf("No tag found for %s/%s (promoted directly from image)\n", appName, environment)
 		return
