@@ -270,6 +270,35 @@ s3dock current myapp staging
 # Output: myapp:20250720-1045-def5678
 ```
 
+#### `list`
+List apps, images, tags, environments, or query semantic tags for environments.
+
+```bash
+# List all apps
+s3dock list apps
+
+# List all images for an app
+s3dock list images myapp
+s3dock list images myapp --month 202507  # Filter by year-month
+
+# List all semantic version tags for an app
+s3dock list tags myapp
+# Output:
+# v2.0.0 -> myapp:20250721-2118-f7a5a27
+# v1.1.0 -> myapp:20250720-1045-abc1234
+# v1.0.0 -> myapp:20250715-0930-def5678
+
+# List all environments for an app
+s3dock list envs myapp
+# Output:
+# production -> myapp:20250721-2118-f7a5a27
+# staging -> myapp:20250720-1045-abc1234 (via v1.1.0)
+
+# Query which semantic tag was used for an environment
+s3dock list tag-for myapp production
+# Output: v2.0.0  (or message if promoted directly from image)
+```
+
 #### `deploy`
 Deploy with blue-green strategy.
 

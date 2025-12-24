@@ -62,7 +62,7 @@ func main() {
 	case "version", "--version", "-v":
 		handleVersionCommand(commandArgs)
 	case "list":
-		internal.LogInfo("List functionality not yet implemented")
+		handleListCommand(globalFlags, commandArgs)
 	case "cleanup":
 		internal.LogInfo("Cleanup functionality not yet implemented")
 	case "deploy":
@@ -92,9 +92,9 @@ func printUsage() {
 	fmt.Println("  promote <src> <env> Promote image/tag to environment")
 	fmt.Println("  pull <app> <env>    Pull image from environment")
 	fmt.Println("  current <app> <env> Show current image for environment")
+	fmt.Println("  list                List images, tags, environments, or apps")
 	fmt.Println("  config              Config file management")
 	fmt.Println("  version             Show version information")
-	fmt.Println("  list              List functionality (not implemented)")
 	fmt.Println("  cleanup           Cleanup functionality (not implemented)")
 	fmt.Println("  deploy            Deploy functionality (not implemented)")
 	fmt.Println("")
@@ -771,5 +771,276 @@ func handleVersionCommand(args []string) {
 		fmt.Printf("built: %s\n", date)
 	} else {
 		fmt.Println(version)
+	}
+}
+
+func handleListCommand(globalFlags *GlobalFlags, args []string) {
+	if len(args) == 0 {
+		fmt.Println("Usage: s3dock [global-flags] list <subcommand> [options]")
+		fmt.Println("")
+		fmt.Println("Subcommands:")
+		fmt.Println("  apps                    List all apps")
+		fmt.Println("  images <app>            List all images for an app")
+		fmt.Println("  tags <app>              List all semantic version tags for an app")
+		fmt.Println("  envs <app>              List all environments for an app")
+		fmt.Println("  tag-for <app> <env>     Show the semantic version tag for an environment")
+		fmt.Println("")
+		fmt.Println("Options:")
+		fmt.Println("  --month <YYYYMM>        Filter images by year-month (e.g., 202507)")
+		fmt.Println("")
+		fmt.Println("Examples:")
+		fmt.Println("  s3dock list apps")
+		fmt.Println("  s3dock list images myapp")
+		fmt.Println("  s3dock list images myapp --month 202507")
+		fmt.Println("  s3dock list tags myapp")
+		fmt.Println("  s3dock list envs myapp")
+		fmt.Println("  s3dock list tag-for myapp production")
+		return
+	}
+
+	subcommand := args[0]
+	subArgs := args[1:]
+
+	switch subcommand {
+	case "apps":
+		handleListApps(globalFlags)
+	case "images":
+		handleListImages(globalFlags, subArgs)
+	case "tags":
+		handleListTags(globalFlags, subArgs)
+	case "envs", "environments":
+		handleListEnvironments(globalFlags, subArgs)
+	case "tag-for":
+		handleListTagFor(globalFlags, subArgs)
+	default:
+		internal.LogError("Unknown list subcommand: %s", subcommand)
+		os.Exit(1)
+	}
+}
+
+func handleListApps(globalFlags *GlobalFlags) {
+	config, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
+	if err != nil {
+		internal.LogError("Error loading config: %v", err)
+		os.Exit(1)
+	}
+
+	ctx := context.Background()
+	setupAWSEnv(config)
+
+	s3Client, err := internal.NewS3Client(ctx)
+	if err != nil {
+		internal.LogError("Failed to create S3 client: %v", err)
+		os.Exit(1)
+	}
+
+	listService := internal.NewListService(s3Client, config.Bucket)
+
+	apps, err := listService.ListApps(ctx)
+	if err != nil {
+		internal.LogError("Failed to list apps: %v", err)
+		os.Exit(1)
+	}
+
+	if len(apps) == 0 {
+		fmt.Println("No apps found")
+		return
+	}
+
+	for _, app := range apps {
+		fmt.Println(app)
+	}
+}
+
+func handleListImages(globalFlags *GlobalFlags, args []string) {
+	if len(args) == 0 {
+		internal.LogError("list images requires app name")
+		fmt.Fprintf(os.Stderr, "Usage: s3dock list images <app> [--month YYYYMM]\n")
+		os.Exit(1)
+	}
+
+	appName := args[0]
+	yearMonth := ""
+
+	// Parse --month flag
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--month" && i+1 < len(args) {
+			yearMonth = args[i+1]
+			i++
+		}
+	}
+
+	config, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
+	if err != nil {
+		internal.LogError("Error loading config: %v", err)
+		os.Exit(1)
+	}
+
+	ctx := context.Background()
+	setupAWSEnv(config)
+
+	s3Client, err := internal.NewS3Client(ctx)
+	if err != nil {
+		internal.LogError("Failed to create S3 client: %v", err)
+		os.Exit(1)
+	}
+
+	listService := internal.NewListService(s3Client, config.Bucket)
+
+	images, err := listService.ListImages(ctx, appName, yearMonth)
+	if err != nil {
+		internal.LogError("Failed to list images: %v", err)
+		os.Exit(1)
+	}
+
+	if len(images) == 0 {
+		fmt.Printf("No images found for %s\n", appName)
+		return
+	}
+
+	for _, img := range images {
+		fmt.Printf("%s:%s\n", img.AppName, img.Tag)
+	}
+}
+
+func handleListTags(globalFlags *GlobalFlags, args []string) {
+	if len(args) == 0 {
+		internal.LogError("list tags requires app name")
+		fmt.Fprintf(os.Stderr, "Usage: s3dock list tags <app>\n")
+		os.Exit(1)
+	}
+
+	appName := args[0]
+
+	config, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
+	if err != nil {
+		internal.LogError("Error loading config: %v", err)
+		os.Exit(1)
+	}
+
+	ctx := context.Background()
+	setupAWSEnv(config)
+
+	s3Client, err := internal.NewS3Client(ctx)
+	if err != nil {
+		internal.LogError("Failed to create S3 client: %v", err)
+		os.Exit(1)
+	}
+
+	listService := internal.NewListService(s3Client, config.Bucket)
+
+	tags, err := listService.ListTags(ctx, appName)
+	if err != nil {
+		internal.LogError("Failed to list tags: %v", err)
+		os.Exit(1)
+	}
+
+	if len(tags) == 0 {
+		fmt.Printf("No tags found for %s\n", appName)
+		return
+	}
+
+	for _, tag := range tags {
+		fmt.Printf("%s -> %s\n", tag.Version, tag.TargetImage)
+	}
+}
+
+func handleListEnvironments(globalFlags *GlobalFlags, args []string) {
+	if len(args) == 0 {
+		internal.LogError("list envs requires app name")
+		fmt.Fprintf(os.Stderr, "Usage: s3dock list envs <app>\n")
+		os.Exit(1)
+	}
+
+	appName := args[0]
+
+	config, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
+	if err != nil {
+		internal.LogError("Error loading config: %v", err)
+		os.Exit(1)
+	}
+
+	ctx := context.Background()
+	setupAWSEnv(config)
+
+	s3Client, err := internal.NewS3Client(ctx)
+	if err != nil {
+		internal.LogError("Failed to create S3 client: %v", err)
+		os.Exit(1)
+	}
+
+	listService := internal.NewListService(s3Client, config.Bucket)
+
+	envs, err := listService.ListEnvironments(ctx, appName)
+	if err != nil {
+		internal.LogError("Failed to list environments: %v", err)
+		os.Exit(1)
+	}
+
+	if len(envs) == 0 {
+		fmt.Printf("No environments found for %s\n", appName)
+		return
+	}
+
+	for _, env := range envs {
+		if env.TargetType == internal.TargetTypeTag && env.SourceTag != "" {
+			fmt.Printf("%s -> %s (via %s)\n", env.Environment, env.SourceImage, env.SourceTag)
+		} else {
+			fmt.Printf("%s -> %s\n", env.Environment, env.SourceImage)
+		}
+	}
+}
+
+func handleListTagFor(globalFlags *GlobalFlags, args []string) {
+	if len(args) < 2 {
+		internal.LogError("list tag-for requires app name and environment")
+		fmt.Fprintf(os.Stderr, "Usage: s3dock list tag-for <app> <env>\n")
+		os.Exit(1)
+	}
+
+	appName := args[0]
+	environment := args[1]
+
+	config, err := internal.ResolveConfig(globalFlags.Config, globalFlags.Profile, globalFlags.Bucket)
+	if err != nil {
+		internal.LogError("Error loading config: %v", err)
+		os.Exit(1)
+	}
+
+	ctx := context.Background()
+	setupAWSEnv(config)
+
+	s3Client, err := internal.NewS3Client(ctx)
+	if err != nil {
+		internal.LogError("Failed to create S3 client: %v", err)
+		os.Exit(1)
+	}
+
+	listService := internal.NewListService(s3Client, config.Bucket)
+
+	tag, err := listService.GetTagForEnvironment(ctx, appName, environment)
+	if err != nil {
+		internal.LogError("Failed to get tag for environment: %v", err)
+		os.Exit(1)
+	}
+
+	if tag == "" {
+		fmt.Printf("No tag found for %s/%s (promoted directly from image)\n", appName, environment)
+		return
+	}
+
+	fmt.Println(tag)
+}
+
+func setupAWSEnv(config *internal.ResolvedConfig) {
+	os.Setenv("AWS_REGION", config.Region)
+	if config.Endpoint != "" {
+		os.Setenv("AWS_ENDPOINT_URL", config.Endpoint)
+	}
+	if config.AccessKey != "" {
+		os.Setenv("AWS_ACCESS_KEY_ID", config.AccessKey)
+	}
+	if config.SecretKey != "" {
+		os.Setenv("AWS_SECRET_ACCESS_KEY", config.SecretKey)
 	}
 }

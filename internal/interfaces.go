@@ -20,6 +20,7 @@ type S3Client interface {
 	DownloadStream(ctx context.Context, bucket, key string) (io.ReadCloser, error)
 	Copy(ctx context.Context, bucket, srcKey, dstKey string) error
 	Delete(ctx context.Context, bucket, key string) error
+	List(ctx context.Context, bucket, prefix string) ([]string, error)
 }
 
 type GitClient interface {

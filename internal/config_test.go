@@ -9,6 +9,25 @@ import (
 )
 
 func TestLoadConfig_DefaultConfig(t *testing.T) {
+	// Change to a temp directory so no config files are found
+	// This ensures we get the built-in defaults
+	origDir, _ := os.Getwd()
+	tmpDir := t.TempDir()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origDir)
+
+	// Temporarily rename user config if it exists
+	homeDir, _ := os.UserHomeDir()
+	userConfigPath := filepath.Join(homeDir, ".s3dock", "config.json5")
+	backupPath := userConfigPath + ".test-backup"
+	hasUserConfig := false
+	if _, err := os.Stat(userConfigPath); err == nil {
+		hasUserConfig = true
+		os.Rename(userConfigPath, backupPath)
+		defer os.Rename(backupPath, userConfigPath)
+	}
+	_ = hasUserConfig // silence unused warning
+
 	config, err := LoadConfig("")
 
 	assert.NoError(t, err)

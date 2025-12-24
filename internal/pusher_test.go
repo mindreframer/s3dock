@@ -76,6 +76,11 @@ func (m *MockS3Client) DownloadStream(ctx context.Context, bucket, key string) (
 	return args.Get(0).(io.ReadCloser), args.Error(1)
 }
 
+func (m *MockS3Client) List(ctx context.Context, bucket, prefix string) ([]string, error) {
+	args := m.Called(ctx, bucket, prefix)
+	return args.Get(0).([]string), args.Error(1)
+}
+
 type MockGitClient struct {
 	mock.Mock
 }
@@ -93,6 +98,11 @@ func (m *MockGitClient) GetCommitTimestamp(path string) (string, error) {
 func (m *MockGitClient) IsRepositoryDirty(path string) (bool, error) {
 	args := m.Called(path)
 	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockGitClient) FindRepositoryRoot(startPath string) (string, error) {
+	args := m.Called(startPath)
+	return args.String(0), args.Error(1)
 }
 
 func TestExtractAppName(t *testing.T) {
