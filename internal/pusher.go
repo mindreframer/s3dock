@@ -85,15 +85,38 @@ func (p *ImagePusher) Push(ctx context.Context, imageRef string) (*PushResult, e
 	}
 	defer imageData.Close()
 
-	// Add gzip compression
-	LogDebug("Compressing image data with gzip")
+	// Parse git time for tar normalization
+	fixedTime, err := ParseGitTime(gitTime)
+	if err != nil {
+		LogError("Failed to parse git time: %v", err)
+		return nil, fmt.Errorf("failed to parse git time: %w", err)
+	}
+
+	// Normalize tar timestamps and add gzip compression
+	LogDebug("Normalizing tar timestamps to %s and compressing with gzip", fixedTime.Format("2006-01-02 15:04:05"))
 	pr, pw := io.Pipe()
 	go func() {
 		defer pw.Close()
+		
+		// Create a pipe for tar normalization
+		normPr, normPw := io.Pipe()
+		
+		// Goroutine 1: Normalize tar
+		go func() {
+			defer normPw.Close()
+			if err := NormalizeTar(imageData, normPw, fixedTime); err != nil {
+				LogError("Failed to normalize tar: %v", err)
+				normPw.CloseWithError(err)
+				return
+			}
+		}()
+		
+		// Goroutine 2: Compress normalized tar
 		gzipWriter := gzip.NewWriter(pw)
+		gzipWriter.ModTime = time.Time{} // Set to zero time for deterministic output
 		defer gzipWriter.Close()
 
-		if _, err := io.Copy(gzipWriter, imageData); err != nil {
+		if _, err := io.Copy(gzipWriter, normPr); err != nil {
 			LogError("Failed to compress image data: %v", err)
 			pw.CloseWithError(err)
 			return

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"archive/tar"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -35,6 +36,21 @@ func (m *MockDockerClient) ImageExists(ctx context.Context, imageRef string) (bo
 func (m *MockDockerClient) BuildImage(ctx context.Context, contextPath string, dockerfile string, tags []string, platform string) error {
 	args := m.Called(ctx, contextPath, dockerfile, tags, platform)
 	return args.Error(0)
+}
+
+// Helper function to create valid tar data for testing
+func createTestTar(content string) io.ReadCloser {
+	buf := &bytes.Buffer{}
+	tarWriter := tar.NewWriter(buf)
+	header := &tar.Header{
+		Name: "test-file.txt",
+		Size: int64(len(content)),
+		Mode: 0644,
+	}
+	tarWriter.WriteHeader(header)
+	tarWriter.Write([]byte(content))
+	tarWriter.Close()
+	return io.NopCloser(bytes.NewReader(buf.Bytes()))
 }
 
 type MockS3Client struct {
@@ -130,7 +146,7 @@ func TestImagePusher_Push_Success_NewImage(t *testing.T) {
 
 	mockGit.On("GetCurrentHash", mock.Anything).Return("abc1234", nil)
 	mockGit.On("GetCommitTimestamp", mock.Anything).Return("20250721-1430", nil)
-	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(io.NopCloser(strings.NewReader("image data")), nil)
+	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(createTestTar("image data"), nil)
 
 	// Metadata doesn't exist (new image)
 	mockS3.On("Exists", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
@@ -167,17 +183,18 @@ func TestImagePusher_Push_Success_ExistingSameChecksum(t *testing.T) {
 
 	mockGit.On("GetCurrentHash", mock.Anything).Return("abc1234", nil)
 	mockGit.On("GetCommitTimestamp", mock.Anything).Return("20250721-1430", nil)
-	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(io.NopCloser(strings.NewReader("image data")), nil)
+	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(createTestTar("image data"), nil)
 
 	// Metadata exists
 	mockS3.On("Exists", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
 		return strings.HasSuffix(key, ".json") && strings.HasPrefix(key, "images/")
 	})).Return(true, nil)
 
-	// Return existing metadata with same checksum (now gzipped)
+	// Return existing metadata with same checksum (normalized tar + gzip)
+	// Checksum calculated for normalized tar with git time 2025-07-21 14:30:00
 	existingMetadata := &ImageMetadata{
-		Checksum: "e3cb4936e6592acbef54276b4eb77d56", // MD5 of gzipped "image data"
-		Size:     34,                                 // Size of compressed data
+		Checksum: "8b1dd42abaabe0ced434b1ac2c4549be", // MD5 of normalized tar + gzipped "image data"
+		Size:     119,                                // Actual size of compressed normalized tar
 	}
 	metadataJSON, _ := existingMetadata.ToJSON()
 	mockS3.On("Download", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
@@ -222,7 +239,7 @@ func TestImagePusher_Push_Success_ChecksumMismatch(t *testing.T) {
 
 	mockGit.On("GetCurrentHash", mock.Anything).Return("abc1234", nil)
 	mockGit.On("GetCommitTimestamp", mock.Anything).Return("20250721-1430", nil)
-	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(io.NopCloser(strings.NewReader("new image data")), nil)
+	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(createTestTar("new image data"), nil)
 
 	// Metadata exists
 	mockS3.On("Exists", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
@@ -296,9 +313,21 @@ func TestImagePusher_Push_VerifyGzipCompression(t *testing.T) {
 
 	originalData := "test image data that should be compressed"
 
+	// Create a valid tar containing the test data
+	tarBuf := &bytes.Buffer{}
+	tarWriter := tar.NewWriter(tarBuf)
+	header := &tar.Header{
+		Name: "test-file.txt",
+		Size: int64(len(originalData)),
+		Mode: 0644,
+	}
+	tarWriter.WriteHeader(header)
+	tarWriter.Write([]byte(originalData))
+	tarWriter.Close()
+
 	mockGit.On("GetCurrentHash", mock.Anything).Return("abc1234", nil)
 	mockGit.On("GetCommitTimestamp", mock.Anything).Return("20250721-1430", nil)
-	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(io.NopCloser(strings.NewReader(originalData)), nil)
+	mockDocker.On("ExportImage", mock.Anything, "myapp:latest").Return(io.NopCloser(bytes.NewReader(tarBuf.Bytes())), nil)
 
 	// Metadata doesn't exist (new image)
 	mockS3.On("Exists", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
@@ -333,14 +362,25 @@ func TestImagePusher_Push_VerifyGzipCompression(t *testing.T) {
 	assert.NotNil(t, uploadedData, "Should have captured uploaded data")
 
 	// Verify the uploaded data is gzip compressed
-	reader, err := gzip.NewReader(uploadedData)
-	assert.NoError(t, err, "Uploaded data should be valid gzip")
+	gzipReader, gzErr := gzip.NewReader(uploadedData)
+	assert.NoError(t, gzErr, "Uploaded data should be valid gzip")
+	defer gzipReader.Close()
 
-	decompressed, err := io.ReadAll(reader)
-	assert.NoError(t, err, "Should be able to decompress uploaded data")
-	assert.Equal(t, originalData, string(decompressed), "Decompressed data should match original")
+	// Verify it contains valid tar data with normalized timestamps
+	tarReader := tar.NewReader(gzipReader)
+	header, tarErr := tarReader.Next()
+	assert.NoError(t, tarErr, "Should contain valid tar data")
+	assert.Equal(t, "test-file.txt", header.Name, "Should preserve file name")
 
-	reader.Close()
+	// Verify the content is correct
+	content, readErr := io.ReadAll(tarReader)
+	assert.NoError(t, readErr, "Should be able to read tar content")
+	assert.Equal(t, originalData, string(content), "File content should be preserved")
+
+	// Verify timestamp was normalized to git commit time
+	expectedTime, parseErr := ParseGitTime("20250721-1430")
+	assert.NoError(t, parseErr)
+	assert.True(t, header.ModTime.Equal(expectedTime), "Timestamp should be normalized to git commit time")
 
 	mockGit.AssertExpectations(t)
 	mockDocker.AssertExpectations(t)
