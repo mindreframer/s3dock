@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.1.10]
+
+### Fixed
+- **CopyObject with bucket-subdomain endpoints**: Fixed `NoSuchKey` (404) error when archiving an existing image before overwriting it on providers using bucket-subdomain style endpoints (e.g. `https://mybucket.s3.region.provider.com`). The `CopySource` header was missing the bucket-name path prefix that such endpoints require for stored keys.
+
 ## [v0.1.9]
 
 ### Added
