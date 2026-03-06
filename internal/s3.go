@@ -132,7 +132,16 @@ func (s *S3ClientImpl) Download(ctx context.Context, bucket, key string) ([]byte
 }
 
 func (s *S3ClientImpl) Copy(ctx context.Context, bucket, srcKey, dstKey string) error {
-	copySource := bucket + "/" + srcKey
+	// CopySource must be "<bucket>/<key>" where key is the full key as stored in S3.
+	// When using a bucket-subdomain endpoint (e.g. https://mybucket.s3.region.provider.com),
+	// keys are stored with the bucket name as a path prefix (keyPrefix = "mybucket/"),
+	// so the actual stored key is keyPrefix+srcKey, and CopySource must include both.
+	var copySource string
+	if s.keyPrefix != "" {
+		copySource = bucket + "/" + s.keyPrefix + srcKey
+	} else {
+		copySource = bucket + "/" + srcKey
+	}
 	_, err := s.client.CopyObject(ctx, &s3.CopyObjectInput{
 		Bucket:     aws.String(bucket),
 		Key:        aws.String(dstKey),
