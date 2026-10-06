@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.1.11]
+
+### Fixed
+- **Cross-month image lookup**: `tag` and direct `promote` now derive the S3 folder from the image timestamp instead of the current month, allowing older images to be tagged or promoted.
+
 ## [v0.1.10]
 
 ### Fixed

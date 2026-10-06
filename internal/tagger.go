@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 )
 
 type ImageTagger struct {
@@ -35,7 +34,7 @@ func (t *ImageTagger) Tag(ctx context.Context, imageRef, version string) (*TagRe
 	LogDebug("Parsed image reference - app: %s, git time: %s, git hash: %s", appName, gitTime, gitHash)
 
 	// Construct expected image S3 path
-	yearMonth := time.Now().Format("200601") // Use current year/month for lookup
+	yearMonth := gitTime[:6]
 	imageFilename := fmt.Sprintf("%s-%s-%s.tar.gz", appName, gitTime, gitHash)
 	imageS3Path := fmt.Sprintf("images/%s/%s/%s", appName, yearMonth, imageFilename)
 
@@ -126,7 +125,7 @@ func (p *ImagePromoter) Promote(ctx context.Context, source, environment string)
 		LogDebug("Parsed image reference - app: %s, git time: %s, git hash: %s", appName, gitTime, gitHash)
 
 		// Construct expected image S3 path
-		yearMonth := time.Now().Format("200601") // Use current year/month for lookup
+		yearMonth := gitTime[:6]
 		imageFilename := fmt.Sprintf("%s-%s-%s.tar.gz", appName, gitTime, gitHash)
 		imageS3Path := fmt.Sprintf("images/%s/%s/%s", appName, yearMonth, imageFilename)
 

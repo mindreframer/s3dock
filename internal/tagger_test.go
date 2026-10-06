@@ -13,10 +13,8 @@ import (
 func TestImageTagger_Tag_Success(t *testing.T) {
 	mockS3 := new(MockS3Client)
 
-	// Mock image exists check
-	mockS3.On("Exists", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
-		return strings.HasSuffix(key, ".tar.gz") && strings.HasPrefix(key, "images/")
-	})).Return(true, nil)
+	// Image lookup uses the image timestamp's month, not the current month.
+	mockS3.On("Exists", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250721-1430-abc1234.tar.gz").Return(true, nil)
 
 	// Mock tag upload
 	mockS3.On("Upload", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
@@ -64,10 +62,8 @@ func TestImageTagger_Tag_InvalidImageReference(t *testing.T) {
 func TestImagePromoter_Promote_DirectImage_Success(t *testing.T) {
 	mockS3 := new(MockS3Client)
 
-	// Mock image exists check
-	mockS3.On("Exists", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
-		return strings.HasSuffix(key, ".tar.gz") && strings.HasPrefix(key, "images/")
-	})).Return(true, nil)
+	// Image lookup uses the image timestamp's month, not the current month.
+	mockS3.On("Exists", mock.Anything, "test-bucket", "images/myapp/202507/myapp-20250721-1430-abc1234.tar.gz").Return(true, nil)
 
 	// Mock checking for existing pointer (for audit trail)
 	mockS3.On("Exists", mock.Anything, "test-bucket", mock.MatchedBy(func(key string) bool {
